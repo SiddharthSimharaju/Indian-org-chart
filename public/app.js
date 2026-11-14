@@ -1,5 +1,6 @@
 // Indian org chart: interactive org tree. Data comes from /data/india.json (built from Wikipedia).
 import { EXPLAIN, PARTY_INFO, reservedSeat } from "./explain.js";
+import { track, visitorCount } from "./analytics.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -394,13 +395,14 @@ function toggle(id) {
     els.forEach((el, eid) => { if (isUnder(nodes.get(eid), id)) el.classList.add("leaving"); });
     setTimeout(() => { expanded.delete(id); render(); centerOn(id, zoom, 0.3); toggling = false; }, 220);
   } else {
-    expanded.add(id); growId = id;
+    expanded.add(id); growId = id; track("expands");
     render();
     centerOn(id, zoom, 0.3);
     setTimeout(() => { growId = null; toggling = false; }, 600);
   }
 }
 function select(id, mi = null, { center = false, open = true } = {}) {
+  if (open) track("cards");
   selectedId = id; memberIdx = mi; tab = "overview";
   if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
   if (view === "tree") {
@@ -591,6 +593,7 @@ function renderTab(n, member, p) {
 }
 $("#panel").addEventListener("click", (e) => {
   if (e.target.closest("[data-close]")) return closePanel();
+  if (e.target.closest(".btn-dark, a.link")) track("wiki");
   const t = e.target.closest("[data-tab]"); if (t) { tab = t.dataset.tab; const n = nodes.get(selectedId); $("#panel").querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", b === t)); return renderTab(n, memberIdx != null ? n.members[memberIdx] : null, memberIdx != null ? n.members[memberIdx] : n.kind === "office" ? n.person : null); }
   const g = e.target.closest("[data-go]"); if (g) return select(g.dataset.go, null, { center: view === "tree" });
   const r = e.target.closest("tr[data-mi]"); if (r) return select(selectedId, +r.dataset.mi);
@@ -612,12 +615,13 @@ function showResults(q) {
   if (!q) return hideResults();
   const words = q.split(/\s+/);
   const score = (s) => { const t = s.title.toLowerCase(); return words.every((w) => t.split(/[\s.]+/).includes(w)) ? 0 : words.every((w) => t.includes(w)) ? 1 : 2; };
-  const hits = SEARCH.filter((s) => words.every((w) => s.key.toLowerCase().includes(w))).sort((a, b) => score(a) - score(b)).slice(0, 8);
+  const hits = SEARCH.filter((s) => words.every((w) => s.key.toLowerCase().includes(w))).sort((a, b) => score(a) - score(b)).slice(0, 12);
   hi = 0; box.hidden = false;
   box.innerHTML = hits.length ? hits.map((h, i) => `<button class="result" data-i="${i}" aria-selected="${i === 0}">${h.p ? avatar(h.p) : `<div class="tile" style="--tile:${tileColor(h.n)};width:40px;height:40px;border-radius:11px">${icon(nodeIcon(h.n))}</div>`}<div><div class="t">${esc(h.title)}</div><div class="s">${esc(h.sub)}</div></div></button>`).join("") : `<div class="none">No matches for “${esc(q)}”</div>`;
   box._hits = hits;
 }
 function pick(h) {
+  track("searches");
   hideResults(); $("#q").value = "";
   select(h.id, h.mi ?? null, { center: true });
 }
@@ -659,7 +663,7 @@ $("#listview").addEventListener("click", (e) => {
 
 /* ---------- View switching ---------- */
 function setView(v) {
-  view = v;
+  view = v; if (v === "list") track("listview");
   document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-selected", b.dataset.view === v));
   $("#canvas").hidden = v !== "tree"; $("#listview").hidden = v !== "list";
   $("#stage").classList.toggle("list", v === "list");
@@ -682,6 +686,8 @@ async function boot() {
   const states = nodes.get("states").children.reduce((a, r) => a + r.children.length, 0);
   $("#subtitle").textContent = `${states} states · ${nodes.get("uts").children.length} union territories · ${[...nodes.values()].filter((n) => n.kind === "office").length} office holders`;
   initPanZoom(); initMinimap(); initSearch();
+  track("pageloads");
+  visitorCount().then((n) => { if (n == null) return; const v = $("#visitors"); v.textContent = `${n.toLocaleString("en-IN")} ${n === 1 ? "visitor" : "visitors"}`; v.hidden = false; });
   document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
   render(); fit(false);
   const h = location.hash.slice(1);

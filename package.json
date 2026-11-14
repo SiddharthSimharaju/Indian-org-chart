@@ -6,7 +6,8 @@
   "description": "Interactive org chart of Indian politics",
   "scripts": {
     "build:data": "node scripts/build-data.mjs",
-    "start": "node scripts/serve.mjs"
+    "start": "node scripts/serve.mjs",
+    "stats": "node scripts/stats.mjs"
   },
   "devDependencies": {
     "cheerio": "^1.0.0"
