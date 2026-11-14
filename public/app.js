@@ -111,20 +111,45 @@ function cardSub(n) {
   if (n.id === "lok-sabha") return `${n.place} · Speaker ${n.person.name}`;
   return n.place;
 }
+// Every person card shows the same three facts, so cards line up and can be compared at a glance.
+const NONPARTISAN = ["president", "cji", "cec", "ag", "governor", "lg", "admin"];
+const PERSON = {
+  president: { where: ["Jurisdiction", "All of India"], chosen: "Electoral College", term: "5 years" },
+  vp: { where: ["Jurisdiction", "Parliament"], chosen: "MPs", term: "5 years" },
+  pm: { where: ["Jurisdiction", "All of India"], chosen: "President, on Lok Sabha majority", term: "Up to 5 years" },
+  cji: { where: ["Jurisdiction", "Supreme Court"], chosen: "President", term: "Until age 65" },
+  cec: { where: ["Jurisdiction", "Election Commission"], chosen: "President, on a committee's advice", term: "6 years or age 65" },
+  ag: { where: ["Jurisdiction", "Union Government"], chosen: "President", term: "At pleasure" },
+  governor: { where: ["State"], chosen: "President", term: "5 years" },
+  lg: { where: ["Territory"], chosen: "President", term: "At pleasure" },
+  admin: { where: ["Territory"], chosen: "President", term: "At pleasure" },
+  cm: { where: ["State"], chosen: "Governor, on assembly majority", term: "Up to 5 years" },
+  mp: { where: ["Constituency"], chosen: "Constituency voters", term: "5 years" },
+  rsmp: { where: ["State"], chosen: "State MLAs", term: "6 years" },
+  mla: { where: ["Constituency"], chosen: "Constituency voters", term: "5 years" },
+  minister: { where: ["Portfolio"], chosen: "PM or Chief Minister", term: "At pleasure" },
+};
+function personCard(n) {
+  const m = PERSON[n.role] || {}, p = n.person;
+  const party = p.party ? `<span class="n-party" style="--pc:${partyColor(p.party)}"><i></i>${esc(p.party)}</span>` : `<span class="n-party none">${NONPARTISAN.includes(n.role) ? "Non-partisan" : "No party listed"}</span>`;
+  const where = m.where ? [m.where[0], m.where[1] || n.place] : ["Jurisdiction", n.place];
+  const rows = [where, ["Chosen by", m.chosen || "—"], ["Term", m.term || "—"]];
+  return `
+    <div class="n-top"><div class="n-av">${avatar(p)}</div><div class="n-id"><p class="n-name">${esc(p.name)}</p><p class="n-sub">${esc(n.label)}</p></div></div>
+    ${party}
+    <div class="n-stats">${rows.map(([k, v]) => `<div class="n-stat"><span>${esc(k)}</span><b title="${esc(v)}">${esc(v)}</b></div>`).join("")}</div>
+    ${n.children.length ? `<button class="toggle" data-act="toggle" aria-label="Show or hide ${esc(n.label)} reports"></button>` : ""}`;
+}
 function partyRows(n) {
   if (!n.parties?.length) return "";
   const top = n.parties.slice(0, 4), rest = n.parties.slice(4);
   return `<div class="n-parties">${top.map(([p, c]) => `<div class="n-party-row" style="--pc:${partyColor(p)}"><i></i>${esc(p)}<b>${c}</b></div>`).join("")}${rest.length ? `<div class="n-party-row more">+${rest.length} more parties<b>${rest.reduce((a, [, c]) => a + c, 0)}</b></div>` : ""}</div>`;
 }
 function cardHTML(n) {
-  const isP = n.kind === "office";
-  const head = isP ? avatar(n.person) : `<div class="tile" style="--tile:${tileColor(n)}">${icon(nodeIcon(n))}</div>`;
-  const name = isP ? n.person.name : n.label;
-  const party = isP && n.person.party ? `<span class="n-party" style="--pc:${partyColor(n.person.party)}"><i></i>${esc(n.person.party)}</span>` : "";
+  if (n.kind === "office") return personCard(n);
   const stats = (n.stats || []).map((s) => `<div class="n-stat"><span>${esc(s.label)}</span><b>${esc(s.value)}</b></div>`).join("");
   return `
-    <div class="n-top"><div class="n-av">${head}</div><div class="n-id"><p class="n-name">${esc(name)}</p><p class="n-sub">${esc(cardSub(n))}</p></div><span class="n-badge">${esc(n.badge)}</span></div>
-    ${party}
+    <div class="n-top"><div class="n-av"><div class="tile" style="--tile:${tileColor(n)}">${icon(nodeIcon(n))}</div></div><div class="n-id"><p class="n-name">${esc(n.label)}</p><p class="n-sub">${esc(cardSub(n))}</p></div><span class="n-badge">${esc(n.badge)}</span></div>
     ${stats ? `<div class="n-stats">${stats}</div>` : ""}${partyRows(n)}
     ${n.children.length ? `<button class="toggle" data-act="toggle" aria-label="Show or hide ${esc(n.label)} reports"></button>` : ""}`;
 }
@@ -136,15 +161,16 @@ function visible(n = DATA.root, out = []) { out.push(n); visibleKids(n).forEach(
 const ROW_GAP = 14;
 // Person cards (MPs, MLAs, ministers) have a fixed height so they can be laid out without touching the DOM,
 // and are only created while on screen. That keeps "expand everything" fast.
-const LEAF_H = 130, LEAF_ROLES = ["mla", "mp", "rsmp", "minister"];
+const LEAF_H = 200, LEAF_ROLES = ["mla", "mp", "rsmp", "minister"];
 const isLeaf = (n) => n.kind === "office" && !n.children.length && LEAF_ROLES.includes(n.role);
 let visSet = new Set(), leaves = [];
+document.documentElement.style.setProperty("--person-h", LEAF_H + "px");
 const grids = new Map(); // parentId -> {cols, rows}
 // More than five leaf cards (MPs, MLAs) are stacked in columns instead of one very wide row.
 function gridOf(n) {
   const k = visibleKids(n);
   if (k.length <= 5 || !k.every((c) => !c.children.length)) return null;
-  const cols = Math.min(4, Math.ceil(k.length / 5));
+  const cols = Math.min(5, Math.ceil(k.length / 5));
   return { cols, rows: Math.ceil(k.length / cols) };
 }
 function layout() {
@@ -189,7 +215,7 @@ function render(anchorId) {
     let el = els.get(n.id);
     if (!el) {
       el = document.createElement("div");
-      el.className = `node kind-${n.kind} enter`; el.dataset.id = n.id; el.tabIndex = 0; el.setAttribute("role", "button");
+      el.className = `node kind-${n.kind}${n.kind === "office" ? " person" : ""} enter`; el.dataset.id = n.id; el.tabIndex = 0; el.setAttribute("role", "button");
       el.innerHTML = cardHTML(n);
       const pp = n.parent && pos.get(n.parent.id);
       el.style.transform = pp ? `translate(${pp.x}px,${pp.y}px)` : "translate(0,0)";
@@ -259,7 +285,7 @@ function cull() {
     let el = els.get(n.id);
     if (on && !el) {
       el = document.createElement("div");
-      el.className = `node kind-office leaf${n.id === selectedId ? " selected" : ""}`; el.dataset.id = n.id; el.tabIndex = 0; el.setAttribute("role", "button");
+      el.className = `node kind-office person leaf${n.id === selectedId ? " selected" : ""}`; el.dataset.id = n.id; el.tabIndex = 0; el.setAttribute("role", "button");
       el.innerHTML = cardHTML(n); el.style.transform = `translate(${p.x}px,${p.y}px)`;
       stage.appendChild(el); els.set(n.id, el);
     } else if (!on && el) { el.remove(); els.delete(n.id); }
