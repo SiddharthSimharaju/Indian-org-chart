@@ -242,7 +242,7 @@ function drawEdges(vis) {
     const p = pos.get(n.id), g = grids.get(n.id);
     if (g) {
       const kids = visibleKids(n), x1 = p.x + CARD_W / 2, y1 = p.y + p.h, top = pos.get(kids[0].id).y, barY = top - GAP_Y / 2;
-      const hotAny = kids.some((c) => hot.has(c.id)), cls = `edge ${hotAny ? "hot" : ""}`;
+      const hotAny = kids.some((c) => hot.has(c.id)), cls = `edge ${hotAny ? "hot" : ""} ${n.id === growId ? "new" : ""}`;
       const cx = (i) => pos.get(kids[Math.floor(i * g.rows)].id).x + CARD_W / 2;
       const xs = Array.from({ length: g.cols }, (_, i) => cx(i));
       d += `<path class="${cls}" d="M${x1} ${y1}V${barY}"/>`;
@@ -257,7 +257,7 @@ function drawEdges(vis) {
       const q = pos.get(c.id), x1 = p.x + CARD_W / 2, y1 = p.y + p.h, x2 = q.x + CARD_W / 2, y2 = q.y - 2, my = y2 - GAP_Y / 2, dx = x2 - x1;
       const r = Math.min(14, Math.abs(dx) / 2), s = Math.sign(dx);
       const path = Math.abs(dx) < 1 ? `M${x1} ${y1}V${y2}` : `M${x1} ${y1}V${my - r}Q${x1} ${my} ${x1 + s * r} ${my}H${x2 - s * r}Q${x2} ${my} ${x2} ${my + r}V${y2}`;
-      d += `<path class="edge ${hot.has(c.id) ? "hot" : ""}" d="${path}" marker-end="url(#arr)"/>`;
+      d += `<path class="edge ${hot.has(c.id) ? "hot" : ""} ${n.id === growId ? "new" : ""}" d="${path}" marker-end="url(#arr)"/>`;
     });
   });
   svg.innerHTML = d;
@@ -286,8 +286,12 @@ function cull() {
     if (on && !el) {
       el = document.createElement("div");
       el.className = `node kind-office person leaf${n.id === selectedId ? " selected" : ""}`; el.dataset.id = n.id; el.tabIndex = 0; el.setAttribute("role", "button");
-      el.innerHTML = cardHTML(n); el.style.transform = `translate(${p.x}px,${p.y}px)`;
+      el.innerHTML = cardHTML(n);
+      const grow = growId && n.parent?.id === growId && pos.get(growId);
+      if (grow) { const q = pos.get(growId); el.classList.add("enter"); el.style.transform = `translate(${q.x}px,${q.y}px)`; }
+      else el.style.transform = `translate(${p.x}px,${p.y}px)`;
       stage.appendChild(el); els.set(n.id, el);
+      if (grow) { void el.offsetWidth; requestAnimationFrame(() => { el.style.transform = `translate(${p.x}px,${p.y}px)`; el.classList.remove("enter"); }); }
     } else if (!on && el) { el.remove(); els.delete(n.id); }
   }
 }
@@ -303,11 +307,11 @@ function fit(animate = true) {
   tx = (availW - b.w * k) / 2 - b.x1 * k; ty = 56 - b.y1 * k;
   smooth(animate); applyView();
 }
-function centerOn(id, zoom) {
+function centerOn(id, zoom, yFrac = 0.5) {
   const p = pos.get(id); if (!p) return;
   const c = canvas(), availW = c.clientWidth - panelW();
   if (zoom) k = zoom;
-  tx = availW / 2 - (p.x + p.w / 2) * k; ty = c.clientHeight / 2 - (p.y + p.h / 2) * k - 20;
+  tx = availW / 2 - (p.x + p.w / 2) * k; ty = c.clientHeight * yFrac - (p.y + p.h / 2) * k - (yFrac === 0.5 ? 20 : 0);
   smooth(true); applyView();
 }
 function smooth(on) {
@@ -378,9 +382,23 @@ function initMinimap() {
 }
 
 /* ---------- Interaction ---------- */
+let growId = null, toggling = false;
+const isUnder = (n, id) => { for (let a = n.parent; a; a = a.parent) if (a.id === id) return true; return false; };
+// Expanding: the new cards and edges fade in while the camera glides to centre the card.
+// Collapsing: the children fade out first, then the layout closes up.
 function toggle(id) {
-  expanded.has(id) ? expanded.delete(id) : expanded.add(id);
-  render(id);
+  if (toggling) return;
+  const n = nodes.get(id), zoom = k < 0.55 ? 0.7 : k;
+  toggling = true;
+  if (expanded.has(id)) {
+    els.forEach((el, eid) => { if (isUnder(nodes.get(eid), id)) el.classList.add("leaving"); });
+    setTimeout(() => { expanded.delete(id); render(); centerOn(id, zoom, 0.3); toggling = false; }, 220);
+  } else {
+    expanded.add(id); growId = id;
+    render();
+    centerOn(id, zoom, 0.3);
+    setTimeout(() => { growId = null; toggling = false; }, 600);
+  }
 }
 function select(id, mi = null, { center = false, open = true } = {}) {
   selectedId = id; memberIdx = mi; tab = "overview";

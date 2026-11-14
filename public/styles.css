@@ -247,3 +247,9 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
 .node.person .n-stat b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .node.person .n-stat span { flex: none; }
 .tbl-wrap { content-visibility: auto; contain-intrinsic-size: auto 400px; }
+
+/* smooth expand / collapse */
+.edge.new { animation: edgeIn .5s ease both; }
+@keyframes edgeIn { from { opacity: 0; } to { opacity: 1; } }
+.node.leaving { opacity: 0; pointer-events: none; }
+.node { transition: transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .15s, border-color .15s, opacity .25s; }
