@@ -1,0 +1,14 @@
+{
+  "name": "indian-org-chart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive org chart of Indian politics",
+  "scripts": {
+    "build:data": "node scripts/build-data.mjs",
+    "start": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "cheerio": "^1.0.0"
+  }
+}
