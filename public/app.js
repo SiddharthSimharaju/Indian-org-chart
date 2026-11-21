@@ -1,5 +1,5 @@
-// Indian org chart: interactive org tree. Data comes from /data/india.json (built from Wikipedia).
-import { EXPLAIN, PARTY_INFO, reservedSeat } from "./explain.js";
+// Political Org Charts: interactive org tree for any country in countries/. Data comes from /data/<country>.json (built from Wikipedia).
+import { COUNTRIES, DEFAULT_COUNTRY, ALIASES } from "./countries/index.js";
 import { track, visitorCount } from "./analytics.js";
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -40,28 +40,15 @@ const P = {
   star: '<path d="M12 3l2.8 5.9 6.5.9-4.7 4.5 1.1 6.4L12 17.6 6.3 20.7l1.1-6.4L2.7 9.8l6.5-.9z"/>',
 };
 const icon = (n) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${P[n] || ""}</svg>`;
-const ROLE_ICON = { minister: "briefcase", mla: "vote", mp: "vote", rsmp: "landmark", president: "flag", vp: "landmark", pm: "briefcase", cji: "scale", cec: "vote", ag: "book", governor: "shield", lg: "shield", admin: "shield", cm: "crown" };
-const REGION_ICON = { "region-north": "mountain", "region-northeast": "compass", "region-east": "sunrise", "region-west": "waves", "region-central": "target", "region-south": "sun" };
-const nodeIcon = (n) => {
-  if (REGION_ICON[n.id]) return REGION_ICON[n.id];
-  if (n.id === "states") return "map";
-  if (n.id === "uts") return "building";
-  if (/^(districts|dist|ls|rs)-/.test(n.id)) return "pin";
-  if (n.id === "cabinet" || n.id.startsWith("council-")) return "users";
-  if (n.kind === "house") return "landmark";
-  return n.kind === "group" ? "map" : ROLE_ICON[n.role] || "star";
-};
-
-const chakra = (c = "#000080") => {
-  let s = `<svg viewBox="-50 -50 100 100" fill="none" stroke="${c}" stroke-linecap="round"><circle r="46" stroke-width="3"/><circle r="8" stroke-width="3"/>`;
-  for (let i = 0; i < 24; i++) { const a = (i * 15 * Math.PI) / 180; s += `<path d="M${(9 * Math.sin(a)).toFixed(2)} ${(-9 * Math.cos(a)).toFixed(2)}L${(44 * Math.sin(a)).toFixed(2)} ${(-44 * Math.cos(a)).toFixed(2)}" stroke-width="2"/>`; }
-  return s + "</svg>";
-};
+const nodeIcon = (n) => C.nodeIcon(n);
+const tileColor = (n) => C.tileColor(n);
+const MARK = '<svg viewBox="0 0 32 32" fill="none" stroke="#0b7df2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="11" y="3" width="10" height="7" rx="2"/><path d="M16 10v6M7 16h18M7 16v4M25 16v4"/><rect x="3" y="20" width="8" height="8" rx="2"/><rect x="21" y="20" width="8" height="8" rx="2"/></svg>';
 
 /* ---------- State ---------- */
-let DATA, PARTY = {};
+let C, DATA, PARTY = {}; // C: active country config
 const nodes = new Map(); // id -> node (with parent, depth)
-const expanded = new Set(["president"]);
+const url = (hash = "") => { const u = new URL(location.href); u.hash = hash; return u.pathname + u.search + u.hash; };
+const expanded = new Set();
 const more = new Set();
 let selectedId = null, memberIdx = null, tab = "overview", view = "tree";
 let k = 0.8, tx = 0, ty = 0; // zoom / pan
@@ -69,18 +56,6 @@ const pos = new Map(); // id -> {x,y,w,h}
 const els = new Map();
 
 const GAP_X = 20, GAP_Y = 60, CARD_W = 232;
-const ACCENT = { North: "#0f766e", Northeast: "#7c3aed", East: "#db2777", West: "#ea580c", Central: "#ca8a04", South: "#2563eb", States: "#ff9933", "Union Territories": "#138808", Districts: "#0f766e", District: "#64748b" };
-const tileColor = (n) => {
-  if (n.id === "states") return ACCENT.States;
-  if (n.id === "uts") return ACCENT["Union Territories"];
-  if (n.id === "cabinet" || n.id.startsWith("council-")) return "#b45309";
-  if (n.id.startsWith("ls-")) return "#4f46e5";
-  if (n.id.startsWith("rs-")) return "#7c3aed";
-  if (/^(districts|dist)-/.test(n.id)) return "#0d9488";
-  if (n.kind === "house") return "#1f2a7a";
-  return n.kind === "group" ? ACCENT[n.label] || "#555" : "#222";
-};
-
 const partyColor = (p) => PARTY[p] || PARTY[(p || "").replace(/\s/g, "")] || "#9a9a9a";
 const initials = (name) => name.replace(/\(.*\)/, "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
@@ -107,32 +82,11 @@ document.addEventListener("error", (e) => {
 }, true);
 
 /* ---------- Cards ---------- */
-function cardSub(n) {
-  if (n.kind === "office") return ["governor", "lg", "admin", "cm", "mla", "mp", "rsmp", "minister"].includes(n.role) ? `${n.label} · ${n.place}` : n.label;
-  if (n.id === "lok-sabha") return `${n.place} · Speaker ${n.person.name}`;
-  return n.place;
-}
+const cardSub = (n) => C.cardSub(n);
 // Every person card shows the same three facts, so cards line up and can be compared at a glance.
-const NONPARTISAN = ["president", "cji", "cec", "ag", "governor", "lg", "admin"];
-const PERSON = {
-  president: { where: ["Jurisdiction", "All of India"], chosen: "Electoral College", term: "5 years" },
-  vp: { where: ["Jurisdiction", "Parliament"], chosen: "MPs", term: "5 years" },
-  pm: { where: ["Jurisdiction", "All of India"], chosen: "President", term: "Up to 5 years" },
-  cji: { where: ["Jurisdiction", "Supreme Court"], chosen: "President", term: "Until age 65" },
-  cec: { where: ["Jurisdiction", "Election Commission"], chosen: "President", term: "6 years or age 65" },
-  ag: { where: ["Jurisdiction", "Union Government"], chosen: "President", term: "At pleasure" },
-  governor: { where: ["State"], chosen: "President", term: "5 years" },
-  lg: { where: ["Territory"], chosen: "President", term: "At pleasure" },
-  admin: { where: ["Territory"], chosen: "President", term: "At pleasure" },
-  cm: { where: ["State"], chosen: "Governor", term: "Up to 5 years" },
-  mp: { where: ["Constituency"], chosen: "Constituency voters", term: "5 years" },
-  rsmp: { where: ["State"], chosen: "State MLAs", term: "6 years" },
-  mla: { where: ["Constituency"], chosen: "Constituency voters", term: "5 years" },
-  minister: { where: ["Portfolio"], chosen: "PM or Chief Minister", term: "At pleasure" },
-};
 function personCard(n) {
-  const m = PERSON[n.role] || {}, p = n.person;
-  const party = p.party ? `<span class="n-party" style="--pc:${partyColor(p.party)}"><i></i>${esc(p.party)}</span>` : `<span class="n-party none">${NONPARTISAN.includes(n.role) ? "Non-partisan" : "No party listed"}</span>`;
+  const m = C.person[n.role] || {}, p = n.person;
+  const party = p.party ? `<span class="n-party" style="--pc:${partyColor(p.party)}"><i></i>${esc(p.party)}</span>` : `<span class="n-party none">${C.nonpartisan.includes(n.role) ? "Non-partisan" : "No party listed"}</span>`;
   const where = m.where ? [m.where[0], m.where[1] || n.place] : ["Jurisdiction", n.place];
   const rows = [where, ["Chosen by", m.chosen || "—"], ["Term", m.term || "—"]];
   return `
@@ -162,8 +116,8 @@ function visible(n = DATA.root, out = []) { out.push(n); visibleKids(n).forEach(
 const ROW_GAP = 14;
 // Person cards (MPs, MLAs, ministers) have a fixed height so they can be laid out without touching the DOM,
 // and are only created while on screen. That keeps "expand everything" fast.
-const LEAF_H = 200, LEAF_ROLES = ["mla", "mp", "rsmp", "minister"];
-const isLeaf = (n) => n.kind === "office" && !n.children.length && LEAF_ROLES.includes(n.role);
+const LEAF_H = 200;
+const isLeaf = (n) => n.kind === "office" && !n.children.length && C.leafRoles.includes(n.role);
 let visSet = new Set(), leaves = [];
 document.documentElement.style.setProperty("--person-h", LEAF_H + "px");
 const grids = new Map(); // parentId -> {cols, rows}
@@ -217,6 +171,7 @@ function render(anchorId) {
     if (!el) {
       el = document.createElement("div");
       el.className = `node kind-${n.kind}${n.kind === "office" ? " person" : ""} enter`; el.dataset.id = n.id; el.tabIndex = 0; el.setAttribute("role", "button");
+      if (n.kind !== "office") el.style.setProperty("--tile", tileColor(n));
       el.innerHTML = cardHTML(n);
       const pp = n.parent && pos.get(n.parent.id);
       el.style.transform = pp ? `translate(${pp.x}px,${pp.y}px)` : "translate(0,0)";
@@ -343,8 +298,8 @@ function initPanZoom() {
   $("#zIn").onclick = () => { smooth(true); zoomAt(1.25); };
   $("#zOut").onclick = () => { smooth(true); zoomAt(0.8); };
   $("#fit").onclick = () => fit();
-  $("#expandAll").onclick = () => { nodes.forEach((n) => n.children.length && !/^(districts-|dist-|ls-|rs-)/.test(n.id) && expanded.add(n.id)); render(); fit(); };
-  $("#collapseAll").onclick = () => { expanded.clear(); expanded.add("president"); render(); fit(); };
+  $("#expandAll").onclick = () => { nodes.forEach((n) => n.children.length && !C.expandAllSkip.test(n.id) && expanded.add(n.id)); render(); fit(); };
+  $("#collapseAll").onclick = () => { expanded.clear(); expanded.add(C.rootId); render(); fit(); };
 }
 
 /* ---------- Minimap ---------- */
@@ -404,7 +359,7 @@ function toggle(id) {
 function select(id, mi = null, { center = false, open = true } = {}) {
   if (open) track("cards");
   selectedId = id; memberIdx = mi; tab = "overview";
-  if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
+  if (location.hash.slice(1) !== id) history.replaceState(null, "", url(id));
   if (view === "tree") {
     const had = $("#panel").getAttribute("aria-hidden") === "false";
     for (const a of ancestors(nodes.get(id))) expanded.add(a.id);
@@ -422,7 +377,7 @@ function ensureVisible(id) {
 }
 function closePanel() {
   $("#panel").setAttribute("aria-hidden", "true");
-  selectedId = null; memberIdx = null; history.replaceState(null, "", location.pathname);
+  selectedId = null; memberIdx = null; history.replaceState(null, "", url());
   if (view === "tree") render(); else document.querySelectorAll(".tbl tr.sel").forEach((r) => r.classList.remove("sel"));
 }
 
@@ -444,11 +399,9 @@ const trunc = (t, n = 640) => {
   for (const m of cut.matchAll(/[a-z0-9)\]]{2}\.(?= [A-Z])/g)) i = m.index + 3;
   return i > 200 ? cut.slice(0, i) : cut.trim() + "…";
 };
-const WIKI = { "lok-sabha": "Lok_Sabha", "rajya-sabha": "Rajya_Sabha", cabinet: "Union_Council_of_Ministers", states: "States_and_union_territories_of_India", uts: "Union_territory", "supreme-court": "Supreme_Court_of_India", "election-commission": "Election_Commission_of_India" };
 function wikiFor(n, p) {
   if (p?.wiki) return p.wiki;
-  if (WIKI[n.id]) return "https://en.wikipedia.org/wiki/" + WIKI[n.id];
-  return "https://en.wikipedia.org/w/index.php?search=" + encodeURIComponent(n.label + " " + (n.place || ""));
+  return C.wiki?.(n) || "https://en.wikipedia.org/w/index.php?search=" + encodeURIComponent(n.label + " " + (n.place || ""));
 }
 const chainItem = (n) => {
   const lead = n.kind === "office" ? avatar(n.person) : `<div class="tile" style="--tile:${tileColor(n)}">${icon(nodeIcon(n))}</div>`;
@@ -465,7 +418,7 @@ function showPanel() {
   if (p?.party) tags.push(`<span class="tag party" style="--pc:${partyColor(p.party)}"><i></i>${esc(p.party)}</span>`);
   if (p?.since) tags.push(`<span class="tag">In office since ${esc(p.since)}</span>`);
   if (!p && n.stats?.[0]) tags.push(`<span class="tag">${esc(n.stats[0].label)}: ${esc(n.stats[0].value)}</span>`);
-  { const g = govStatus(n, p); if (g) tags.push(`<span class="tag ${g.startsWith("In") ? "ok" : ""}">${g.startsWith("In") ? "In government" : "Outside government"}</span>`); }
+  { const g = govStatus(n, p); if (g) tags.push(`<span class="tag ${g.ok ? "ok" : ""}">${esc(g.tag)}</span>`); }
   if (p?.note) tags.push(`<span class="tag warn">${esc(p.note)}</span>`);
 
   const tabs = [["overview", "Overview"]];
@@ -473,7 +426,7 @@ function showPanel() {
 
   panel.innerHTML = `
     <div class="p-top">
-      <span class="p-chip">${esc(subject.chip)}</span><h2>${member ? "Member details" : n.kind === "office" ? "Office details" : "Organisation details"}</h2><span class="grow"></span>
+      <span class="p-chip">${esc(subject.chip)}</span><h2>${member ? "Member details" : n.kind === "office" ? "Office details" : C.labels.org}</h2><span class="grow"></span>
       <a class="btn-dark" href="${esc(wikiFor(n, p))}" target="_blank" rel="noopener"><span class="lbl">Open Wikipedia</span>${icon("external")}</a>
       <button class="btn-ghost" data-close aria-label="Close details">${icon("close")}</button>
     </div>
@@ -482,7 +435,7 @@ function showPanel() {
       <div class="p-hero">${hero}<div><h3>${esc(subject.name)}</h3><p class="sub">${esc(subject.sub)}</p>${p?.blurb ? `<p class="sub blurb">${esc(p.blurb)}</p>` : ""}</div><div class="p-tags">${tags.join("")}</div></div>
       <div class="tabs" role="tablist">${tabs.map(([id, l, c]) => `<button role="tab" data-tab="${id}" aria-selected="${tab === id}">${esc(l)}${c ? `<span class="count">${c}</span>` : ""}</button>`).join("")}</div>
       <div id="tabBody"></div>
-      <p class="foot">Source: Wikipedia (CC BY-SA 4.0), fetched ${new Date(DATA.generatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}. Offices change; check the linked article for the latest.</p>
+      <p class="foot">Source: Wikipedia (CC BY-SA 4.0), fetched ${new Date(DATA.generatedAt).toLocaleDateString(C.locale, { day: "numeric", month: "short", year: "numeric" })}. Offices change; check the linked article for the latest.</p>
     </div>`;
   panel.setAttribute("aria-hidden", "false");
   renderTab(n, member, p);
@@ -494,52 +447,8 @@ function factsGrid(items) {
 }
 
 /* ---------- Plain-English context ---------- */
-function explainFor(n, member) {
-  if (member) {
-    const r = member.role || "";
-    if (/^Speaker/.test(r)) return EXPLAIN.speaker;
-    if (/Leader of the Opposition/.test(r)) return EXPLAIN.lop;
-    if (/Deputy Chairman/.test(r)) return EXPLAIN.deputyChair;
-    if (/Deputy Chief Minister/.test(r)) return EXPLAIN.dcm;
-    if (n.id === "cabinet" || n.id.startsWith("council-")) return EXPLAIN.minister;
-    if (n.id === "lok-sabha") return EXPLAIN.mp;
-    if (n.id === "rajya-sabha") return EXPLAIN.rsmp;
-    if (/^(vs|dist)-/.test(n.id)) return EXPLAIN.mla;
-    return null;
-  }
-  if (n.kind === "office") return EXPLAIN[n.role];
-  if (n.id.startsWith("region-")) return EXPLAIN.region;
-  if (n.id.startsWith("council-")) return EXPLAIN.council;
-  if (n.id.startsWith("vs-")) return EXPLAIN.vs;
-  if (n.id.startsWith("districts-")) return EXPLAIN.districts;
-  if (n.id.startsWith("dist-")) return EXPLAIN.district;
-  if (/^(ls|rs)-/.test(n.id)) return EXPLAIN.group;
-  return EXPLAIN[n.id] || null;
-}
-// Which government (Union or a particular state) a node belongs to
-function govScope(n) {
-  for (let a = n; a; a = a.parent) {
-    if (a.id.startsWith("cm-")) return a.id.slice(3);
-    if (["lok-sabha", "rajya-sabha", "cabinet", "pm"].includes(a.id)) return "union";
-  }
-  return null;
-}
-const govCache = new Map();
-function govParties(scope) {
-  if (!govCache.has(scope)) {
-    const s = new Set();
-    if (scope === "union") { (nodes.get("cabinet")?.members || []).forEach((m) => m.party && s.add(m.party)); const pm = nodes.get("pm")?.person?.party; if (pm) s.add(pm); }
-    else { (nodes.get("council-" + scope)?.members || []).forEach((m) => m.party && s.add(m.party)); const cm = nodes.get("cm-" + scope)?.person?.party; if (cm) s.add(cm); }
-    govCache.set(scope, s);
-  }
-  return govCache.get(scope);
-}
-function govStatus(n, p) {
-  if (!p?.party || n.id === "president" || n.role === "governor") return null;
-  const scope = govScope(n); if (!scope) return null;
-  const inGov = govParties(scope).has(p.party), where = scope === "union" ? "Union" : "state";
-  return inGov ? `In government. Their party has ministers in the ${where} government.` : `Outside government. Their party has no ministers in the ${where} government.`;
-}
+const explainFor = (n, member) => C.explainFor(n, member);
+const govStatus = (n, p) => C.govStatus?.(n, p, { nodes }) || null;
 function plainBlock(n, member) {
   const ex = explainFor(n, member); if (!ex) return "";
   return `<div class="plain"><h4>In plain English</h4><p>${esc(ex.plain)}</p>${(ex.facts || []).map(([k, v]) => `<div class="pf"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
@@ -549,7 +458,7 @@ function termsBlock(n, member) {
   return `<div class="sect">Words you'll see</div>${ex.terms.map(([t, d]) => `<div class="term"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join("")}`;
 }
 function partyAbout(p) {
-  const info = p?.party && PARTY_INFO[p.party]; if (!info) return "";
+  const info = p?.party && C.partyInfo[p.party]; if (!info) return "";
   return `<div class="sect">About the party</div><div class="plain"><p><b style="font-weight:500">${esc(info[0])}</b><br>${esc(info[1])}</p></div>`;
 }
 
@@ -558,11 +467,11 @@ function renderTab(n, member, p) {
   if (tab === "overview") {
     let facts;
     if (member) facts = [["Role", member.role], ["Party", member.party], ["In office since", member.since], ["Constituency", member.constituency], ["Part of", n.kind === "office" ? n.person.name + "'s team" : n.label]];
-    else if (p) facts = [["Office", n.label], ["Jurisdiction", n.place], ["Party", p.party], ["In office since", p.since], ["Seat / constituency", p.constituency], ["Election year", p.election], ["Appointed by", p.appointedBy], ["Alliance", p.stateAlliance || p.nationalAlliance], ...(n.stats || []).filter((s) => ["Capital", "Lok Sabha seats", "Rajya Sabha seats", "Residence", "Term"].includes(s.label)).map((s) => [s.label, s.value])];
+    else if (p) facts = [["Office", n.label], ["Jurisdiction", n.place], ["Party", p.party], ["In office since", p.since], ["Seat / constituency", p.constituency], ["Election year", p.election], ["Appointed by", p.appointedBy], ["Alliance", p.stateAlliance || p.nationalAlliance], ...(n.stats || []).filter((s) => C.statLabels.includes(s.label)).map((s) => [s.label, s.value])];
     else facts = (n.stats || []).map((s) => [s.label, s.value]);
     const who = member || p;
     const seatName = who?.constituency || (["mla", "mp"].includes(n.role) ? n.place : "");
-    if (who) { facts.push(["Reserved seat", reservedSeat(seatName)], ["Government role", govStatus(n, who)]); }
+    if (who) { facts.push(["Reserved seat", C.reservedSeat?.(seatName)], ["Government role", govStatus(n, who)?.detail]); }
     const about = p ? p.bio : n.summary;
     const tot = (n.parties || []).reduce((a, [, c]) => a + c, 0);
     const partyBlock = !member && n.parties?.length ? `<div class="h-row" style="margin-top:18px"><h4>By party</h4><span class="pill">${tot} members</span></div><div class="pbar">${n.parties.map(([pp, c]) => `<span style="--pc:${partyColor(pp)};width:${(c / tot) * 100}%" title="${esc(pp)} ${c}"></span>`).join("")}</div>${n.parties.map(([pp, c]) => `<div class="prow" style="--pc:${partyColor(pp)}"><i></i>${esc(pp)}<b>${c}</b></div>`).join("")}` : "";
@@ -583,7 +492,7 @@ function renderTab(n, member, p) {
   } else if (tab === "members") {
     body.innerHTML = `<div class="h-row"><h4>${esc(n.membersLabel || "Members")}</h4><span class="pill">${n.members.length}</span></div>
       <div class="filter-wrap"><span data-icon="search">${icon("search")}</span><input class="filter" id="mf" placeholder="Search" aria-label="Filter members"></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>${n.id === "cabinet" || n.id.startsWith("council-") ? "Portfolio" : n.id.startsWith("vs-") || n.id.startsWith("dist-") || n.id === "lok-sabha" ? "Constituency" : "Role"}</th><th>Party</th></tr></thead><tbody id="mrows"></tbody></table></div>`;
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>${C.membersHeader(n)}</th><th>Party</th></tr></thead><tbody id="mrows"></tbody></table></div>`;
     const draw = (q = "") => {
       $("#mrows").innerHTML = n.members.map((m, i) => [m, i]).filter(([m]) => (m.name + m.role + m.party).toLowerCase().includes(q.toLowerCase()))
         .map(([m, i]) => `<tr class="click" data-mi="${i}"><td><div class="who">${avatar(m)}${esc(m.name)}</div></td><td class="role">${esc(trunc(m.role || "", 90))}</td><td>${m.party ? `<span class="chip" style="--pc:${partyColor(m.party)}"><i></i>${esc(m.party)}</span>` : ""}</td></tr>`).join("") || `<tr><td colspan="3" class="role">No matches</td></tr>`;
@@ -643,15 +552,14 @@ let partyFilter = null;
 function renderList() {
   const lv = $("#listview"), rows = [];
   const add = (section, n, p, role, mi) => rows.push({ section, n, p, role, mi });
-  const R = DATA.root;
-  const sectionOf = (n) => { const a = [n, ...ancestors(n).reverse()]; const reg = a.find((x) => x.id.startsWith("region-")); if (reg) return `States · ${reg.label}`; if (a.some((x) => x.id === "uts")) return "Union Territories"; if (a.some((x) => x.id === "cabinet")) return "Union Cabinet"; return "Union leadership & institutions"; };
+  const sectionOf = (n) => C.listSection(n, ancestors(n));
   nodes.forEach((n) => {
     if (n.kind === "office") add(sectionOf(n), n, n.person, cardSub(n));
-    (n.members || []).forEach((m, i) => !m.mirror && add(n.id === "cabinet" ? "Union Cabinet" : sectionOf(n), n, m, m.role || n.membersLabel, i));
+    (n.members || []).forEach((m, i) => !m.mirror && add(n.id === C.listCabinetId ? C.listCabinetSection : sectionOf(n), n, m, m.role || n.membersLabel, i));
   });
   const seen = new Set(), uniq = rows.filter((r) => { const key = r.section + r.p.name + r.role; if (seen.has(key)) return false; seen.add(key); return true; });
   const parties = Object.entries(uniq.reduce((a, r) => (r.p.party ? ((a[r.p.party] = (a[r.p.party] || 0) + 1), a) : a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const order = ["Union leadership & institutions", "Union Cabinet", ...[...new Set(uniq.map((r) => r.section))].filter((s) => s.startsWith("States")).sort(), "Union Territories"];
+  const order = C.listOrder(new Set(uniq.map((r) => r.section)));
   const filtered = uniq.filter((r) => !partyFilter || r.p.party === partyFilter);
   lv.innerHTML = `<div class="lv-controls"><b style="margin-right:6px">Filter by party</b>${parties.map(([p, c]) => `<button class="fchip" data-party="${esc(p)}" style="--pc:${partyColor(p)}" aria-pressed="${partyFilter === p}"><i></i>${esc(p)} · ${c}</button>`).join("")}${partyFilter ? `<button class="fchip" data-party="">Clear</button>` : ""}</div>` +
     order.map((s) => { const rs = filtered.filter((r) => r.section === s); if (!rs.length) return ""; return `<div class="lv-group">${esc(s)}<span class="pill">${rs.length}</span></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Office</th><th>Party</th><th>Since</th></tr></thead><tbody>${rs.map((r) => `<tr class="click" data-id="${r.n.id}" data-mi="${r.mi ?? ""}"><td><div class="who">${avatar(r.p)}${esc(r.p.name)}</div></td><td class="role">${esc(trunc(r.role || "", 80))}</td><td>${r.p.party ? `<span class="chip" style="--pc:${partyColor(r.p.party)}"><i></i>${esc(r.p.party)}</span>` : "—"}</td><td class="role">${esc(r.p.since || "—")}</td></tr>`).join("")}</tbody></table></div>`; }).join("");
@@ -670,28 +578,77 @@ function setView(v) {
   if (v === "list") renderList(); else { render(); if (selectedId) centerOn(selectedId); }
 }
 
+/* ---------- Countries ---------- */
+const dataCache = new Map();
+let loadSeq = 0;
+const safe = (fn) => { try { return fn(); } catch { return null; } };
+const pickCountry = () => {
+  const q = new URLSearchParams(location.search).get("c")?.toLowerCase();
+  const id = ALIASES[q] || q || safe(() => localStorage.getItem("poc-country"));
+  return COUNTRIES[id] ? id : DEFAULT_COUNTRY;
+};
+function resetState() {
+  nodes.clear(); els.clear(); pos.clear(); grids.clear(); more.clear(); expanded.clear();
+  $("#nodes").innerHTML = ""; $("#edges").innerHTML = "";
+  selectedId = null; memberIdx = null; tab = "overview"; growId = null; toggling = false; partyFilter = null; visSet = new Set(); leaves = [];
+  mm = { s: 1, ox: 0, oy: 0, b: null };
+  $("#panel").setAttribute("aria-hidden", "true"); $("#q").value = ""; hideResults();
+}
+async function loadCountry(id, hash = "") {
+  const seq = ++loadSeq;
+  resetState();
+  C = COUNTRIES[id];
+  document.documentElement.dataset.country = C.id;
+  document.title = `Political Org Charts · ${C.pageTitle}`;
+  $('meta[name="description"]')?.setAttribute("content", C.description);
+  $("#q").placeholder = C.searchPlaceholder;
+  $("#subtitle").textContent = "Loading…";
+  $("#countryFlag").textContent = C.flag; $("#countryName").textContent = C.name;
+  $("#countryMenu").querySelectorAll("[data-country]").forEach((b) => b.setAttribute("aria-selected", b.dataset.country === C.id));
+  $("#loading")?.remove();
+  $("#stage").insertAdjacentHTML("beforeend", `<div class="loading" id="loading">${esc(C.loading)}</div>`);
+  let data = dataCache.get(C.id);
+  try {
+    if (!data) { const res = await fetch(C.dataUrl); if (!res.ok) throw new Error(res.status); data = await res.json(); dataCache.set(C.id, data); }
+  } catch (e) {
+    if (seq === loadSeq) $("#loading").textContent = `Couldn't load ${C.dataUrl}. Run \`npm run build:data\` and serve the public folder.`;
+    return;
+  }
+  if (seq !== loadSeq) return; // a newer switch superseded this one
+  $("#loading").remove();
+  DATA = data; PARTY = DATA.partyColors || {};
+  index(DATA.root); buildSearch(); expanded.add(C.rootId);
+  $("#subtitle").textContent = C.subtitle(nodes);
+  if (view === "list") renderList(); else { render(); fit(false); }
+  if (hash && nodes.has(hash)) select(hash, null, { center: true });
+}
+async function switchCountry(id) {
+  if (!COUNTRIES[id] || id === C?.id) return;
+  const u = new URL(location.href); u.searchParams.set("c", id); u.hash = "";
+  history.replaceState(null, "", u.pathname + u.search);
+  safe(() => localStorage.setItem("poc-country", id));
+  track("country" + id);
+  await loadCountry(id);
+}
+function initCountryMenu() {
+  const btn = $("#countryBtn"), menu = $("#countryMenu");
+  menu.innerHTML = Object.values(COUNTRIES).map((c) => `<button role="option" class="country-opt" data-country="${c.id}" aria-selected="false"><span class="flag">${c.flag}</span>${esc(c.name)}</button>`).join("");
+  const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+  btn.addEventListener("click", () => { menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); });
+  menu.addEventListener("click", (e) => { const o = e.target.closest("[data-country]"); if (!o) return; close(); switchCountry(o.dataset.country); });
+  document.addEventListener("click", (e) => { if (!e.target.closest("#country")) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { close(); btn.focus(); } });
+}
+
 /* ---------- Boot ---------- */
 async function boot() {
   document.querySelectorAll("[data-icon]").forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
-  $("#brandMark").innerHTML = chakra();
-  $("#stage").insertAdjacentHTML("beforeend", '<div class="loading" id="loading">Loading the republic…</div>');
-  try {
-    DATA = await (await fetch("data/india.json")).json();
-  } catch (e) {
-    $("#loading").textContent = "Couldn't load data/india.json. Run `npm run build:data` and serve the public folder."; return;
-  }
-  $("#loading").remove();
-  PARTY = DATA.partyColors || {};
-  index(DATA.root); buildSearch();
-  const states = nodes.get("states").children.reduce((a, r) => a + r.children.length, 0);
-  $("#subtitle").textContent = `${states} states · ${nodes.get("uts").children.length} union territories · ${[...nodes.values()].filter((n) => n.kind === "office").length} office holders`;
-  initPanZoom(); initMinimap(); initSearch();
+  $("#brandMark").innerHTML = MARK;
+  initCountryMenu(); initPanZoom(); initMinimap(); initSearch();
   track("pageloads");
-  visitorCount().then((n) => { if (n == null) return; const v = $("#visitors"); v.textContent = `${n.toLocaleString("en-IN")} ${n === 1 ? "visitor" : "visitors"}`; v.hidden = false; });
+  visitorCount().then((n) => { if (n == null) return; const v = $("#visitors"); v.textContent = `${n.toLocaleString()} ${n === 1 ? "visitor" : "visitors"}`; v.hidden = false; });
   document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
-  render(); fit(false);
-  const h = location.hash.slice(1);
-  if (h && nodes.has(h)) select(h, null, { center: true });
   window.addEventListener("resize", () => updateMinimapView());
+  await loadCountry(pickCountry(), location.hash.slice(1));
 }
 boot();

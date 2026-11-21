@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Indian Org Chart</title>
-  <meta name="description" content="An interactive org chart of Indian politics: the President, Prime Minister, Parliament, Governors and Chief Ministers of every state.">
+  <title>Political Org Charts</title>
+  <meta name="description" content="Interactive org charts of the political systems of the world: who runs each country, and who answers to whom.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -16,9 +16,15 @@
       <div class="brand">
         <span class="brand-mark" id="brandMark" aria-hidden="true"></span>
         <div>
-          <h1>Indian Org Chart</h1>
+          <h1>Political Org Charts</h1>
           <p id="subtitle">Loading…</p>
         </div>
+      </div>
+      <div class="country" id="country">
+        <button class="country-btn" id="countryBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a country" title="Choose a country">
+          <span class="flag" id="countryFlag"></span><span id="countryName"></span><span data-icon="chevron"></span>
+        </button>
+        <div class="country-menu" id="countryMenu" role="listbox" aria-label="Countries" hidden></div>
       </div>
       <div class="search" id="search">
         <span data-icon="search"></span>

@@ -1,11 +1,13 @@
 {
-  "name": "indian-org-chart",
+  "name": "political-org-charts",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Interactive org chart of Indian politics",
+  "description": "Interactive org charts of the political systems of the world",
   "scripts": {
-    "build:data": "node scripts/build-data.mjs",
+    "build:data": "npm run build:india && npm run build:usa",
+    "build:india": "node scripts/build-india.mjs",
+    "build:usa": "node scripts/build-usa.mjs",
     "start": "node scripts/serve.mjs",
     "stats": "node scripts/stats.mjs"
   },
