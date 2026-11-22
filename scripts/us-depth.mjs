@@ -1,4 +1,6 @@
 // State legislature members, scraped defensively from Wikipedia chamber pages.
+import fs from "node:fs";
+import * as cheerio from "cheerio";
 import { pageHtml, grid, clean, links } from "./wiki.mjs";
 import { normParty } from "./us-facts.mjs";
 
@@ -26,7 +28,7 @@ export async function chamberMembers(pages, seats, opts = {}) {
       const pI = lastIdx(h, /^party\b(?!.*shad)/) >= 0 ? lastIdx(h, /^party\b(?!.*shad)/) : (h[nI + 1] === "party" ? nI + 1 : -1);
       const noI = opts.withNo ? firstIdx(h, /^no\.?$/) : -1;
       const sI = firstIdx(h, /^(start|assumed|took office|since|term start|first elected|elected)/);
-      const out = [], seen = new Set();
+      const out = [], seen = new Set(), vacantRows = [];
       for (const r of g.slice(1)) {
         if (r[dI] === r[nI] && g[0][dI] !== g[0][nI]) continue; // section divider row
         const name = cellText($, r[nI]).replace(/\s*\(.*?\)\s*/g, " ").replace(/\s+/g, " ").trim();
@@ -34,15 +36,34 @@ export async function chamberMembers(pages, seats, opts = {}) {
         const no = noI >= 0 && noI !== dI ? cellText($, r[noI]) : "";
         if (no && no !== district) district = `${district} ${no}`;
         if (/^(name|member|senator|representative)s?$/i.test(name) || /^district$/i.test(district)) continue; // repeated header row
-        if (!name || /^(vacant|vacancy|none|—|-)$/i.test(name) || /vacant/i.test(name)) continue;
+        if (!name || /^(vacant|vacancy|none|—|-)$/i.test(name) || /vacant/i.test(name)) { if (/vacan/i.test(name) && district) vacantRows.push(district); continue; }
         if (/^\d+$/.test(district) && +district > seats) continue; // numbered districts can't exceed the seat count
         const key = district + "|" + name; if (seen.has(key)) continue; seen.add(key);
         const L = links($, r[nI])[0];
         out.push({ title: L?.title, name, district, party: pI >= 0 ? normParty(cellText($, r[pI])) : "", since: sI >= 0 ? dateOf(cellText($, r[sI])) : "" });
       }
+      out.vacant = vacantRows; // districts the Wikipedia table itself marks as vacant
       if (out.length >= seats * 0.9 && out.length <= seats * 1.1 && (!best || Math.abs(out.length - seats) < Math.abs(best.length - seats))) best = out;
     });
     if (best) return best;
   }
   return null;
+}
+
+/** Official Florida Senate roster (flsenate.gov/Senators, reachable from a plain HTTP client). Returns {members:[{name,district,party,image,since}], vacant:[district]}. */
+export async function floridaSenateOfficial() {
+  const url = "https://www.flsenate.gov/Senators/", cache = ".cache/us/flsenate-senators.html";
+  let html;
+  if (fs.existsSync(cache)) html = fs.readFileSync(cache, "utf8");
+  else { const r = await fetch(url, { headers: { "User-Agent": "political-org-charts-fetcher" } }); if (!r.ok) throw new Error("flsenate.gov " + r.status); html = await r.text(); fs.mkdirSync(".cache/us", { recursive: true }); fs.writeFileSync(cache, html); }
+  const $ = cheerio.load(html), members = [], vacant = [];
+  $("table tr").each((_, tr) => {
+    const th = $(tr).find("th").first(), tds = $(tr).find("td"); if (!th.length || !tds.length) return;
+    const raw = th.text().replace(/\s+/g, " ").trim(), district = tds.eq(0).text().trim(), party = tds.eq(1).text().trim();
+    if (!/^\d+$/.test(district)) return;
+    if (!raw || /vacan/i.test(raw) || /vacan/i.test(party)) { vacant.push(district); return; }
+    const [last, ...first] = raw.split(","), img = th.find("img").attr("src");
+    members.push({ name: `${first.join(",").trim()} ${last.trim()}`.trim(), district, party: normParty(party), image: img ? "https://www.flsenate.gov" + img : null, since: "" });
+  });
+  return { members, vacant, url };
 }

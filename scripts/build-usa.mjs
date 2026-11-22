@@ -1,7 +1,7 @@
 // Builds public/data/usa.json: the US political org chart, from Wikipedia. Same node shape as india.json.
 import fs from "node:fs";
 import { pageHtml, grid, clean, links, summaries, thumbs, descriptions } from "./wiki.mjs";
-import { chamberMembers } from "./us-depth.mjs";
+import { chamberMembers, floridaSenateOfficial } from "./us-depth.mjs";
 import { STATES, REGIONS, REGION_BLURB, TERRITORIES, ELECTED_BY, PARTY_COLORS, normParty, SENATE_PAGES, LOWER_PAGES } from "./us-facts.mjs";
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -64,21 +64,26 @@ let vp = null;
 });
 console.log("cabinet", cabinetRows.length, "vp", vp?.name);
 vp.party = await partyOfPage(vp.title);
-for (const c of cabinetRows) c.party = await partyOfPage(c.title);
+// Cabinet officials are appointed, not elected: no party is shown unless a government source states it (none does), so the field is left blank.
+for (const c of cabinetRows) c.party = "";
+// Todd Blanche and Keith Sonderling began as acting officials; the dates on Wikipedia are when they began acting, and no confirmation or swearing-in date is sourced.
+for (const c of cabinetRows) if (["Todd Blanche", "Keith Sonderling"].includes(c.name)) { c.note = `Acting since ${c.since} (date as listed on Wikipedia; confirmation or swearing-in date not sourced)`; c.since = ""; }
+// whitehouse.gov lists Pete Hegseth as "Secretary of War"; the statutory name of the department is still Defense (10 U.S.C. 111).
+for (const c of cabinetRows) if (c.office === "Secretary of Defense") { c.idBase = c.office; c.office = "Secretary of Defense (styled Secretary of War)"; c.deptOverride = "Department of Defense"; }
 
 // Congress
 const housePage = await pageHtml("List of current members of the United States House of Representatives");
 const hTables = housePage("table.wikitable").toArray();
 const houseTable = hTables.find((t) => grid(housePage, t)[0]?.some((c) => /^District$/i.test(T(housePage, c))) && grid(housePage, t).length > 400);
 const delegateTable = hTables.find((t) => { const g = grid(housePage, t); return g.length >= 5 && g.length <= 9 && /district/i.test(T(housePage, g[0][0])) && /at-large/i.test(T(housePage, g[1][0])); });
-const reps = [];
+const reps = [], houseVacant = [];
 const readRep = (g, delegate) => {
   const h = g[0].map((c) => T(housePage, c).toLowerCase());
   const dI = firstIdx(h, /^district/), nI = firstIdx(h, /^member/), pI = lastIdx(h, /^party/), sI = firstIdx(h, /assumed/);
   for (const r of g.slice(1)) {
     const d = T(housePage, r[dI]), name = nameOnly(T(housePage, r[nI]));
-    if (!name || /vacant/i.test(name) || /vacant/i.test(T(housePage, r[pI]))) continue;
     const m = d.match(/^(.*?)\s+(\d+|at-large)$/i); if (!m) continue;
+    if (!name || /vacant/i.test(name) || /vacant/i.test(T(housePage, r[pI]))) { if (!delegate) houseVacant.push(`${STATES[m[1].trim()]?.code || m[1].trim()}-${m[2]}`); continue; }
     const state = m[1].trim(), n = m[2].toLowerCase();
     reps.push({ title: links(housePage, r[nI])[0]?.title, name, state, district: delegate ? "Delegate" : n === "at-large" ? "At-large" : `District ${n}`, party: normParty(T(housePage, r[pI])), since: dateOf(T(housePage, r[sI])), delegate });
   }
@@ -144,6 +149,7 @@ const readGov = (g, nameCol = 2) => g.slice(1).map((r) => ({
 }));
 const governors = readGov(grid(govPage, gTables[0]));
 const terrGovs = readGov(grid(govPage, gTables[1]));
+for (const g of terrGovs) if (g.place === "American Samoa") g.officialName = "Pula'ali'i Nikolao Pula"; // spelling per the National Governors Association
 const dcMayor = readGov(grid(govPage, gTables[2]))[0];
 console.log("governors", governors.length, "territory governors", terrGovs.length, "mayor", dcMayor?.name);
 
@@ -164,6 +170,17 @@ for (const [state, f] of Object.entries(STATES)) {
   const lowerPages = LOWER_PAGES[state] || [`${state} House of Representatives`];
   const l = (legs[state] = {});
   l.senate = await chamberMembers(upperPages, f.senate, { withNo: state === "Massachusetts" }).catch((e) => { console.log("  fail", state, "upper", e.message); return null; });
+  if (state === "Florida") {
+    // The official flsenate.gov roster replaces the Wikipedia list; Wikipedia titles are carried over only where the district and family name agree.
+    try {
+      const off = await floridaSenateOfficial(), key = (n) => n.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/).pop();
+      const wk = new Map((l.senate || []).map((m) => [m.district, m]));
+      const list = off.members.map((m) => ({ ...m, title: wk.get(m.district) && key(wk.get(m.district).name) === key(m.name) ? wk.get(m.district).title : undefined }));
+      list.vacant = off.vacant; list.official = `${off.url} (${off.members.length} senators; District ${off.vacant.join(", ")} vacant)`;
+      console.log("  florida senate: official roster", list.length, "| vacant", off.vacant.join(","), "| differs from the Wikipedia list in", list.filter((m) => !wk.get(m.district) || key(wk.get(m.district).name) !== key(m.name)).length, "districts");
+      l.senate = list;
+    } catch (e) { console.log("  florida official roster unavailable:", e.message); }
+  }
   seatsTotal += f.senate; if (l.senate) seatsParsed += l.senate.length; else failed.push(`${state} ${f.unicameral ? "Legislature" : "Senate"}`);
   if (!f.unicameral) {
     l.lower = await chamberMembers(lowerPages, f.lower, { withNo: state === "Massachusetts" }).catch((e) => { console.log("  fail", state, "lower", e.message); return null; });
@@ -188,16 +205,25 @@ const descOf = await descriptions(allTitles);
 const person = (o, extra = {}) => {
   const s = (o.title && sums[o.title]) || {};
   return {
-    name: s.title?.replace(/\s*\(.*\)$/, "") || o.name,
-    image: s.image || thumbOf[o.title] || null, blurb: s.description || "", bio: s.extract || "", wiki: s.url || (o.title ? wikiUrl(o.title) : null),
-    party: o.party || "", since: o.since || "", ...extra,
+    name: o.officialName || s.title?.replace(/\s*\(.*\)$/, "") || o.name,
+    image: s.image || thumbOf[o.title] || null, blurb: s.description || "", ...(o.bio ? { bio: o.bio, bioHand: true } : { bio: "" }), wiki: s.url || (o.title ? wikiUrl(o.title) : null),
+    party: o.party || "", since: o.since || "", ...(o.note ? { note: o.note } : {}), ...extra,
   };
 };
 // A lightweight person for the long lists (thumbnail + one-line description only).
-const member = (m, extra = {}) => ({
-  name: m.name, image: thumbOf[m.title] || null, blurb: descOf[m.title] || "", bio: "", wiki: m.title ? wikiUrl(m.title) : null,
-  party: m.party || "", since: m.since || "", ...extra,
-});
+// A Wikipedia match for a state legislator is accepted only when its one-line description is a political one and not a disambiguation page; otherwise image, blurb and link stay empty (no guess).
+const POLITICAL = /politic|legislat|\b(senator|representative|assemblyman|assemblywoman|assembly member|delegate|congress(wo)?man|speaker|mayor|governor)\b/i;
+const DISAMBIG = /topics? referred|disambig|may refer to/i;
+const acceptWiki = (t) => !!t && POLITICAL.test(descOf[t] || "") && !DISAMBIG.test(descOf[t] || "");
+const rejected = { state: 0 };
+const member = (m, extra = {}, strict = false) => {
+  const ok = !strict || acceptWiki(m.title);
+  if (strict && m.title && !ok) rejected.state++;
+  return {
+    name: m.name, image: m.image || (ok ? thumbOf[m.title] : null) || null, blurb: ok ? descOf[m.title] || "" : "", bio: "", wiki: ok && m.title ? wikiUrl(m.title) : null,
+    party: m.party || "", since: m.since || "", ...extra,
+  };
+};
 
 // ---------- 3. Build tree ----------
 const mk = (id, kind, label, props = {}) => ({ id, kind, label, children: [], ...props });
@@ -205,6 +231,9 @@ const FACT = (label, value) => ({ label, value });
 const usedIds = new Set();
 const uid = (base) => { let id = base, i = 2; while (usedIds.has(id)) id = `${base}-${i++}`; usedIds.add(id); return id; };
 const house = (id, label, props) => mk(id, "house", label, props);
+const GENERATED = new Date();
+const asOf = `${GENERATED.getUTCDate()} ${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][GENERATED.getUTCMonth()]} ${GENERATED.getUTCFullYear()}`;
+const TIMING = `Shows officeholders as of ${asOf}; results of the 3 November 2026 elections take effect from January 2027 (the new Congress is sworn in on 3 January 2027).`;
 const code = (state) => STATES[state]?.code || TERRITORIES[state]?.code || "";
 
 // ---- Federal
@@ -231,17 +260,17 @@ const deptOf = (office) => {
   if ((m = office.match(/^Administrator of (.+)$/))) return m[1];
   return office;
 };
-const cabinetPeople = cabinetRows.map((c) => ({ ...c, role: c.office, dept: deptOf(c.office) }));
+const cabinetPeople = cabinetRows.map((c) => ({ ...c, role: c.office, dept: c.deptOverride || deptOf(c.idBase || c.office) }));
 const cabinetMembers = cabinetPeople.map((c) => person(c, { role: `${c.office} · ${PLACE(c.dept)}`, note: c.note || undefined, mirror: true }));
 const cabinetNode = house("cabinet", "Cabinet", {
   badge: "CAB", place: "Executive departments", electedBy: ELECTED_BY.cabinet, reportsTo: "President of the United States",
   members: cabinetMembers, membersLabel: "Members",
-  children: cabinetPeople.map((c, i) => mk(uid(`sec-${slug(c.office)}`), "office", c.office, {
+  children: cabinetPeople.map((c, i) => { const cos = c.office === "White House Chief of Staff"; return mk(uid(`sec-${slug(c.idBase || c.office)}`), "office", c.office, {
     badge: "SEC", role: "secretary", place: PLACE(c.dept), person: { ...cabinetMembers[i], mirror: undefined },
-    electedBy: ELECTED_BY.secretary, reportsTo: "President of the United States",
-  })),
-  stats: [FACT("Departments", cabinetPeople.filter((c) => /^(Secretary|Attorney General)/.test(c.office)).length), FACT("Cabinet-level", cabinetPeople.filter((c) => !/^(Secretary|Attorney General)/.test(c.office)).length), FACT("Led by", pres.name)],
-  summary: "The heads of the 15 executive departments, plus other officials the President gives Cabinet rank. They advise the President and run the federal agencies. Each is nominated by the President and confirmed by the Senate.",
+    electedBy: cos ? ELECTED_BY.chiefOfStaff : ELECTED_BY.secretary, reportsTo: cos ? "President of the United States (serves at the President's pleasure; not subject to Senate confirmation)" : "President of the United States",
+  }); }),
+  stats: [FACT("Cabinet members listed", cabinetPeople.length), FACT("Departments", cabinetPeople.filter((c) => /^(Secretary|Attorney General)/.test(c.office)).length), FACT("Cabinet-level", cabinetPeople.filter((c) => !/^(Secretary|Attorney General)/.test(c.office)).length), FACT("Led by", pres.name)],
+  summary: "The heads of the 15 executive departments, plus other officials the President gives Cabinet rank. They advise the President and run the federal agencies. Most are nominated by the President and confirmed by the Senate. The White House Chief of Staff is included here as a cabinet-level appointee (appointed without Senate confirmation), although whitehouse.gov's cabinet page, which lists 21 cabinet-level officials, does not list that role. Cabinet officials are appointed rather than elected, so no party is shown.",
 });
 presidentNode.children = [vpNode, cabinetNode];
 
@@ -263,12 +292,12 @@ const hrGroups = Object.keys(repsByState).sort().map((st) => mk(uid(`hr-${slug(s
 }));
 const votingReps = reps.filter((r) => !r.delegate).length;
 const houseNode = house("house-reps", "House of Representatives", {
-  badge: "HR", place: `${votingReps >= 435 ? 435 : 435} voting members + ${reps.filter((r) => r.delegate).length} delegates`,
+  badge: "HR", place: `${votingReps} voting members + ${reps.filter((r) => r.delegate).length} delegates${houseVacant.length ? `; ${houseVacant.length} vacant` : ""}`,
   sub: `House of Representatives · Speaker ${speaker.name}`, reportsTo: "Congress", electedBy: ELECTED_BY.house,
   person: person(speaker, { role: "Speaker" }), personRole: "Speaker",
   members: [holder("Speaker", speaker), holder("Majority Leader", hMaj), holder("Minority Leader", hMin), ...reps.filter((m) => ![speaker.name, hMaj.name, hMin.name].includes(m.name)).map(repMember)], membersLabel: "Members",
-  stats: [FACT("Seats", 435), FACT("Majority mark", 218), FACT("Speaker", speaker.name)],
-  summary: "The lower house of Congress. Every member is elected from a single-member district every two years, and the number of seats each state gets depends on its population. All spending bills must start here, and it holds the power to impeach federal officials.",
+  stats: [FACT("Seats", 435), FACT("Majority mark", 218), FACT("Speaker", speaker.name), ...(houseVacant.length ? [FACT("Vacant", `${houseVacant.length} (${houseVacant.join(", ")})`)] : [])],
+  summary: `${houseVacant.length ? `Vacant: ${houseVacant.length} (${houseVacant.join(", ")}), so ${votingReps} of the 435 voting seats are filled. ` : ""}` + "The lower house of Congress. Every member is elected from a single-member district every two years, and the number of seats each state gets depends on its population. All spending bills must start here, and it holds the power to impeach federal officials.",
   children: hrGroups,
 });
 
@@ -295,7 +324,7 @@ const senateNode = house("senate", "Senate", {
 const congressNode = house("congress", "Congress", {
   badge: "CONG", place: "Legislative branch", reportsTo: "The voters of the 50 states", electedBy: "Made up of the House of Representatives and the Senate (Article I of the Constitution). Members of both chambers are elected directly by voters.",
   stats: [FACT("Chambers", 2), FACT("Members", 535), FACT("Non-voting delegates", reps.filter((r) => r.delegate).length)],
-  summary: "The legislative branch. Congress writes federal law, controls federal taxes and spending, declares war and checks the President. A bill must pass both chambers and be signed by the President (or survive a veto by two-thirds of each) to become law.",
+  summary: "The legislative branch. Congress writes federal law, controls federal taxes and spending, declares war and checks the President. A bill must pass both chambers and be signed by the President (or survive a veto by two-thirds of each) to become law. " + TIMING,
   children: [houseNode, senateNode],
 });
 
@@ -322,23 +351,33 @@ const legislator = (state, chamberKind, m, chamberLabel) => {
   return mk(uid(`${sen ? "statesen" : "staterep"}-${slug(state)}-${slug(m.district)}-${slug(m.name)}`.slice(0, 90)), "office",
     sen ? "State Senator" : f.lowerMember || "State Representative", {
       badge: sen ? "SEN" : "REP", role: sen ? "statesen" : "staterep", place: m.district ? `District ${m.district}` : state,
-      person: { ...member(m, { constituency: m.district }), role: undefined },
+      person: { ...member(m, { constituency: m.district }, true), role: undefined },
       electedBy: sen ? ELECTED_BY.statesen : ELECTED_BY.staterep, reportsTo: `${state} ${chamberLabel}`,
     });
 };
+const KNOWN_VACANT = {
+  "Texas|senate": "District 22 is vacant (senate.texas.gov)",
+  "Florida|senate": "District 39 is vacant (flsenate.gov)",
+  "Arkansas|senate": "District 1 (Gilmore resigned 30 June 2026; special election 3 November 2026, result not found) and District 18 (Dismang resigned 15 September 2026; special election 15 December 2026)",
+};
 function chamberNode(state, kind, list) {
   const f = STATES[state], sen = kind === "senate";
+  // Nebraska's legislature is officially nonpartisan: no party is shown (the Nebraska Legislature site was not checked for registered parties).
+  if (state === "Nebraska" && list) list = list.map((m) => ({ ...m, party: "Nonpartisan" }));
   const label = sen ? (f.unicameral ? "Legislature" : "Senate") : f.lowerName || "House of Representatives";
   const seats = sen ? f.senate : f.lower;
+  // Seats with no card: say how many, and whether they are known vacancies or gaps in the scraped list.
+  const vac = list ? seats - list.length : 0, wikiVac = Math.min(list?.vacant?.length || 0, vac), known = KNOWN_VACANT[`${state}|${kind}`];
+  const vacantText = vac > 0 ? ` ${vac} of ${seats} seats have no card: ${known ? `known vacancies: ${known}${list.official ? "" : " (not on the Wikipedia list)"}` : wikiVac === vac ? `all ${vac} are marked vacant on Wikipedia's table (not independently checked)` : wikiVac > 0 ? `${wikiVac} marked vacant on Wikipedia's table, and ${vac - wikiVac} not listed (possible vacancies or a gap in the scraped table)` : `not listed on Wikipedia's table (possible vacancies or a gap in the scraped table)`}.` : "";
   const node = house(`state-${sen ? "senate" : "house"}-${slug(state)}`, label, {
     badge: f.code, place: `${state} ${label}`, reportsTo: f.unicameral ? `Voters of ${state}` : `Governor of ${state} (laws need the governor's signature)`,
     electedBy: f.unicameral ? "49 senators, each directly elected by the voters of one district. Nebraska's legislature is the only unicameral and officially nonpartisan state legislature in the US: candidates run without party labels." : `${seats} members, each directly elected by the voters of one district, for terms of two or four years depending on the state.`,
-    stats: [FACT("Seats", seats), FACT("Majority mark", Math.floor(seats / 2) + 1), FACT("Chamber", f.unicameral ? "Unicameral" : sen ? "Upper house" : "Lower house")],
-    summary: list ? `${state}'s ${f.unicameral ? "single-chamber legislature" : sen ? "upper house" : "lower house"}, meeting in ${f.capital}.` : `${state}'s ${f.unicameral ? "single-chamber legislature" : sen ? "upper house" : "lower house"}, meeting in ${f.capital}. A full member list could not be read reliably from Wikipedia, so it is not shown here.`,
+    stats: [FACT("Seats", seats), FACT("Majority mark", Math.floor(seats / 2) + 1), FACT("Chamber", f.unicameral ? "Unicameral" : sen ? "Upper house" : "Lower house"), ...(vac > 0 ? [FACT("Vacant or not listed", vac)] : [])],
+    summary: list ? `${state}'s ${f.unicameral ? "single-chamber legislature" : sen ? "upper house" : "lower house"}, meeting in ${f.capital}.${vacantText}` : `${state}'s ${f.unicameral ? "single-chamber legislature" : sen ? "upper house" : "lower house"}, meeting in ${f.capital}. A full member list could not be read reliably from Wikipedia, so it is not shown here.`,
   });
   if (list) {
     node.membersLabel = "Members";
-    node.members = list.map((m) => member(m, { constituency: m.district, role: m.district ? `District ${m.district}` : "", mirror: true }));
+    node.members = list.map((m) => member(m, { constituency: m.district, role: m.district ? `District ${m.district}` : "", mirror: true }, true));
     node.children = list.map((m) => legislator(state, kind, m, label));
   }
   return node;
@@ -377,7 +416,7 @@ const regionNodes = REGIONS.map((r) => {
   });
 });
 const statesNode = mk("states", "group", "States", {
-  badge: "50", place: "Governors and legislatures", summary: "50 states, each with a governor elected by its voters and its own legislature. States run most day-to-day government: schools, police, roads, courts and elections.",
+  badge: "50", place: "Governors and legislatures", summary: "50 states, each with a governor elected by its voters and its own legislature. States run most day-to-day government: schools, police, roads, courts and elections. " + TIMING + " State legislator lists come from Wikipedia, except the Florida Senate, which comes from flsenate.gov. They have been checked against official legislature sites for only Arizona, Maine, the Texas Senate and the Florida Senate; the Florida House site could not be reached, and the other chambers are unchecked.",
   stats: [FACT("States", 50), FACT("House seats", Object.values(STATES).reduce((a, s) => a + s.house, 0)), FACT("State legislators", Object.values(STATES).reduce((a, s) => a + s.senate + s.lower, 0).toLocaleString("en-US"))],
   children: regionNodes,
 });
@@ -436,6 +475,29 @@ const missing = [];
 (function walk(n) { if (n.person && !n.person.image) missing.push(n.id); n.children.forEach(walk); })(root);
 console.log("no image:", missing.length, "of", offices, "offices (Wikipedia has no photo)");
 
+// ---- self-checks (the build fails if any breaks; --force overrides) ----
+const errors = [];
+const LOADED = /\b(far[- ]?right|far[- ]?left|ultra[- ]?nationalist|revisionis[mt]|extremis[mt]|populis[mt]|fascis[mt]|neo-?nazi|radical right|hard[- ]?line|demagogue)\b/i;
+const WRONG_BLURB = /boxer|footballer|topics? referred|may refer to|disambiguation|tennis player/i;
+const nodeStat = (n, label) => n.stats?.find((x) => x.label === label)?.value;
+(function walk(n) {
+  const people = [n.person, ...(n.members || [])].filter(Boolean);
+  for (const p of people) {
+    if (p.bio && !p.bioHand) errors.push(`${n.id}: bio of ${p.name} is not marked hand-written`);
+    if (LOADED.test(p.bio || "") || LOADED.test(p.blurb || "") || LOADED.test(p.note || "")) errors.push(`${n.id}: loaded wording for ${p.name}`);
+    if (WRONG_BLURB.test(p.blurb || "")) errors.push(`${n.id}: wrong-person blurb for ${p.name}: "${p.blurb}"`);
+    for (const k of ["name", "blurb", "note"]) if (/\n|[ˈˌːəɪʊɛɔæɑʃʒθðŋ]/.test(p[k] || "")) errors.push(`${n.id}: newline or IPA in ${k} of ${p.name}`);
+  }
+  if (n.kind === "house" && /^state-(senate|house)-/.test(n.id) && n.members) {
+    const seats = nodeStat(n, "Seats"), vac = nodeStat(n, "Vacant or not listed") || 0;
+    if (n.members.length + vac !== seats) errors.push(`${n.id}: ${n.members.length} cards + ${vac} vacant or not listed != ${seats} seats`);
+  }
+  n.children.forEach(walk);
+})(root);
+{ const c = cabinetNode; if (nodeStat(c, "Cabinet members listed") !== c.children.length) errors.push("cabinet: the stat does not match the number of cards"); }
+if (errors.length) { console.log(`SELF-CHECK: ${errors.length} problem(s)`); errors.slice(0, 40).forEach((e) => console.log("  ✗ " + e)); if (!process.argv.includes("--force")) { console.log("NOT written (use --force to override)"); process.exit(1); } } else console.log("SELF-CHECK: ok");
+console.log("state-legislator Wikipedia matches rejected (political-descriptor filter):", rejected.state);
+
 fs.mkdirSync("public/data", { recursive: true });
-fs.writeFileSync("public/data/usa.json", JSON.stringify({ generatedAt: new Date().toISOString(), source: "Wikipedia (CC BY-SA 4.0)", partyColors: PARTY_COLORS, root }, (k, v) => (v === "" || v === null ? undefined : v)));
+fs.writeFileSync("public/data/usa.json", JSON.stringify({ generatedAt: GENERATED.toISOString(), source: "Wikipedia (CC BY-SA 4.0)", partyColors: PARTY_COLORS, root }, (k, v) => (v === "" || v === null ? undefined : v)));
 console.log("wrote public/data/usa.json", (fs.statSync("public/data/usa.json").size / 1024).toFixed(0) + " KB");

@@ -90,7 +90,9 @@ export const ELECTED_BY = {
   vp:
     "Elected on the same ticket as the President through the Electoral College (12th Amendment), for a four-year term. Presides over the Senate and breaks tied votes, and becomes President if that office falls vacant (25th Amendment).",
   cabinet:
-    "Each member is nominated by the President and must be confirmed by a majority vote of the Senate. They serve at the President's pleasure and can be dismissed at any time. The Cabinet is not described in the Constitution beyond a reference to the President's 'principal Officer in each of the executive Departments'.",
+    "Most members are nominated by the President and confirmed by a majority vote of the Senate; the White House Chief of Staff is appointed without Senate confirmation. They serve at the President's pleasure and can be dismissed at any time. The Cabinet is not described in the Constitution beyond a reference to the President's 'principal Officer in each of the executive Departments'.",
+  chiefOfStaff:
+    "Appointed by the President; no Senate confirmation. The Chief of Staff leads the White House staff in the Executive Office of the President and serves at the President's pleasure.",
   secretary:
     "Nominated by the President and confirmed by a majority of the Senate (Article II, Section 2). Serves at the President's pleasure. Leads a federal department or agency and sits in the Cabinet.",
   speaker:
@@ -132,7 +134,7 @@ export const ELECTED_BY = {
 };
 
 export const PARTY_COLORS = {
-  Democratic: "#2563EB", Republican: "#DC2626", Independent: "#6B7280", Nonpartisan: "#9CA3AF", Libertarian: "#EAB308", Progressive: "#16A34A",
+  Democratic: "#2563EB", Republican: "#DC2626", Independent: "#6B7280", Nonpartisan: "#9CA3AF", "No party affiliation": "#9CA3AF", Libertarian: "#EAB308", Progressive: "#16A34A",
   Green: "#15803D", Constitution: "#7C3AED", Other: "#A1A1AA",
   "Popular Democratic": "#EF4444", "New Progressive": "#0EA5E9", "Democratic Party": "#2563EB",
 };
@@ -145,9 +147,11 @@ export const normParty = (raw = "") => {
   if (/democratic.?farmer.?labor|^dfl|democratic-npl|democratic.?nonpartisan|^democratic|^democrat|^dem\b/.test(s)) return /popular democratic/.test(s) ? "Popular Democratic" : "Democratic";
   if (/republican|^rep\b|^gop$/.test(s)) return "Republican";
   if (/new progressive/.test(s)) return "New Progressive";
+  if (/^prog(ressive)?\b/.test(s)) return "Progressive"; // Vermont Progressives are listed as "Prog/Dem" on Wikipedia
   if (/popular democratic/.test(s)) return "Popular Democratic";
   if (/independent|^ind\b|caucus|unaffiliated|unenrolled/.test(s)) return "Independent";
   if (/non-?partisan/.test(s)) return "Nonpartisan";
+  if (/no party affiliation/.test(s)) return "No party affiliation";
   if (/libertarian/.test(s)) return "Libertarian";
   if (/progressive/.test(s)) return "Progressive";
   if (/green/.test(s)) return "Green";
