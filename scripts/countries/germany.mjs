@@ -170,6 +170,7 @@ export default {
     const person = async (page, party = true) => { const i = await incumbent(page); return { title: i.title, name: nm(i.title, i.name), since: i.since, ...(party ? { party: await partyOfPage(i.title, norm) } : {}) }; };
     const headOfState = await person("President of Germany", false);
     const headOfGov = await person("Chancellor of Germany");
+    if (headOfGov.name === "Friedrich Merz") headOfGov.bio = "Friedrich Merz is the Chancellor of Germany and chairman of the Christian Democratic Union (CDU)."; // hand-written neutral bio (builder check 7)
     console.log("president", headOfState.name, "| chancellor", headOfGov.name, headOfGov.party);
 
     // ---- Wikipedia 21st Bundestag page: used for photos/links (name -> article) and for departures reported after the open-data file's date ----
@@ -225,6 +226,10 @@ export default {
     }
     for (const c of nameChanges) { const m = byKey.get(fl(c.from)); if (!m) continue; byKey.delete(fl(c.from)); byKey.set(fl(c.to), { ...m, name: c.to, note: `Name changed from ${c.from} on ${iso(c.date)} (bundestag.de)` }); }
     const members = [...byKey.values()].map((m) => ({ ...m, title: wikiTitle.get(fl(m.name)) }));
+    const NOTE_MDB = { [fl("Jan Wenzel Schmidt")]: "Party member; excluded from the AfD parliamentary group on 3 March 2026, sits fraktionslos (bundestag.de)", [fl("Gerhard Trabert")]: "Seat held but not exercised for health reasons (evangelisch.de, 19 August 2025)" };
+    for (const m of members) if (NOTE_MDB[fl(m.name)]) m.note = NOTE_MDB[fl(m.name)];
+    const tally = members.reduce((a, m) => { const k = /^Independent/.test(m.party) ? "independents" : m.party; a[k] = (a[k] || 0) + 1; return a; }, {});
+    console.log("bundestag party tally:", JSON.stringify(tally));
     console.log("reconciled with bundestag.de departures:", departures.length, "listed;", removed, "removed from the file;", already, "successors already in the file;", added.length, "added (" + added.join(", ") + ") => members", members.length);
     const pres = await incumbent("President of the Bundestag");
     const lead = members.find((m) => fl(m.name) === fl(nm(pres.title, pres.name)));
@@ -271,6 +276,7 @@ export default {
         const roles = card.find("h3").map((__, x) => page(x).text().replace(/\s+/g, " ").trim()).get();
         const img = card.find("img").first().attr("src"), name = strip(rawName);
         const m = { name, title: wikiTitle.get(fl(name)), seat: roles.slice(0, 2).join(" · "), group: state, party: norm(PARTY_BR[rawParty] || rawParty), since: "", image: img, ref: `de-bundesrat-${nameKey(name).replace(/ /g, "-")}-${state}` };
+        if (fl(name) === fl("Claudia Müller") && state === "Mecklenburg-Vorpommern") { m.seat = "Member of the state government; ministry title not confirmed after the November 2026 re-election"; m.title = undefined; m.wiki = null; }
         delegates.push(m);
         const headRole = roles.find((r) => /(Ministerpräsident|Regierende[rn]? Bürgermeister|Erste[rn]? Bürgermeister|Präsident des Senats)/i.test(r) && !/Stellvertret|Zweite|Dritte|Vizepräsident/i.test(r)); if (headRole) heads[state] = { ...m, roleDe: headRole };
       });
@@ -310,19 +316,21 @@ export default {
     const wikiHead = new Map(lt.g.slice(1).map((r) => [nameOnly(T(mp, r[0])), { key: nameKey(nm(links(mp, r[2]).find((l) => !/^(List of|Governing Mayor|First Mayor|Mayor|Minister|President of the Senate)/i.test(l.title))?.title, "")), since: dateOf(T(mp, r[5])), title: links(mp, r[2]).find((l) => !/^(List of|Governing Mayor|First Mayor|Mayor|Minister|President of the Senate)/i.test(l.title))?.title }]));
     const LABEL = { Berlin: "Governing Mayor", Hamburg: "First Mayor and President of the Senate", Bremen: "President of the Senate and Mayor" };
     const NOTE = {
-      Berlin: "Senate continues in office after the 20 September 2026 election; Linke, Greens and SPD began coalition talks on 2 November 2026 (reported)",
+      Berlin: "Caretaker government after the 20 September 2026 election; Linke, Greens and SPD began coalition talks on 2 November 2026 (reported)",
       "Saxony-Anhalt": "Remains in office after the 6 September 2026 election; formation of a new government not confirmed",
-      "Mecklenburg-Vorpommern": "Re-elected by the Landtag in November 2026 (reported); details of the new cabinet not confirmed",
+      "Mecklenburg-Vorpommern": "Re-elected 16 November 2026 (39 of 71 votes; SPD, Linke and Greens) (infranken)",
     };
     // Start dates are kept only where they were confirmed; the rest are left blank rather than taken from Wikipedia unchecked.
-    const CONFIRMED_SINCE = new Set(["Baden-Württemberg", "Rhineland-Palatinate"]), UNCONFIRMED = new Set(["Thuringia", "Saarland"]);
+    const CONFIRMED_SINCE = new Set(["Baden-Württemberg", "Rhineland-Palatinate"]), UNCONFIRMED = new Set();
+    // Start dates sourced by hand: Voigt elected 12 December 2024 (zdfheute), Rehlinger 25 April 2022 (orf.at), Schulze 28 January 2026.
+    const SINCE_HAND = { Thuringia: "2024-12-12", Saarland: "2022-04-25", "Saxony-Anhalt": "2026-01-28", "Mecklenburg-Vorpommern": "2026-11-16" };
     const regions = Object.keys(VOTES).sort().map((state) => {
       const h = heads[state], wk = wikiHead.get(state); if (!h) return null;
       const agrees = wk && wk.key === nameKey(h.name);
-      return { name: state, headLabel: LABEL[state] || "Minister-President", head: { title: h.title || wk?.title, name: h.name, party: h.party, since: agrees && !NOTE[state] && CONFIRMED_SINCE.has(state) ? wk.since : "", image: h.image, ref: h.ref, ...(NOTE[state] ? { note: NOTE[state] } : {}), ...(!NOTE[state] && UNCONFIRMED.has(state) ? { note: "Listed as head of government on bundesrat.de; start date not confirmed" } : {}) } };
+      return { name: state, headLabel: LABEL[state] || "Minister-President", head: { title: h.title || wk?.title, name: h.name, party: h.party, since: SINCE_HAND[state] || (agrees && !NOTE[state] && CONFIRMED_SINCE.has(state) ? wk.since : ""), image: h.image, ref: h.ref, ...(NOTE[state] ? { note: NOTE[state] } : {}), ...(!NOTE[state] && UNCONFIRMED.has(state) ? { note: "Listed as head of government on bundesrat.de; start date not confirmed" } : {}) } };
     }).filter(Boolean);
     console.log("state leaders (bundesrat.de)", regions.length, "| names differing from Wikipedia:", regions.filter((r) => { const wk = wikiHead.get(r.name); return wk && wk.key !== nameKey(r.head.name); }).map((r) => r.name).join(", ") || "none");
 
-    return { headOfState, headOfGov, ministers, chambers: { bundestag, bundesrat }, judges, regions, note: `Bundestag: official open data (Wahlperiode 21, file dated 29 April 2026) reconciled with the departures, successors and name changes on bundestag.de; cabinet from bundesregierung.de; Bundesrat delegations and state leaders from bundesrat.de; judges from bundesverfassungsgericht.de` };
+    return { headOfState, headOfGov, ministers, chambers: { bundestag, bundesrat }, judges, regions, note: `Bundestag: official open data (Wahlperiode 21, file dated 29 April 2026) reconciled with the departures, successors and name changes on bundestag.de; cabinet from bundesregierung.de; Bundesrat delegations and state leaders from bundesrat.de; judges from bundesverfassungsgericht.de. Party and parliamentary-group counts differ; this chart counts by party (CDU ${tally.CDU}, CSU ${tally.CSU}, AfD ${tally.AfD}, SPD ${tally.SPD}, Greens ${tally.Greens}, Linke ${tally["Die Linke"]}, SSW ${tally.SSW}, independents ${tally.independents}). Bundesrat: the full members listed on bundesrat.de are shown; the deputy members (stellvertretende Mitglieder) listed there separately are not` };
   },
 };

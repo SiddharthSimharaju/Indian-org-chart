@@ -40,7 +40,7 @@ export default {
     "Team Mirai": ["Team Mirai", "Founded in 2025."],
     "Reiwa Shinsengumi": ["Reiwa Shinsengumi", "Founded in 2019."],
     "Democratic Reform Party (民主改革の会)": ["Democratic Reform Party (民主改革の会)", "Launched on 24 September 2026 with 18 representatives who had left the Centrist Reform Alliance (jiji.com). Minshu Kaikaku no Kai is the official Japanese name; an official English name is unconfirmed."],
-    "Centrist Reform Alliance (winding up)": ["Centrist Reform Alliance", "Formed in 2026; most of its members left in September 2026 and the remaining member, Sō Watanabe, stayed to wind it up (jiji.com, 24 September 2026)."],
+    "Centrist Reform Alliance (winding up)": ["Centrist Reform Alliance", "Decided to disband on 9 September; 48 of its 49 members left on 16 September; Sō Watanabe stayed to wind up the party (kumanichi.com; NHK)."],
   },
 
   headOfState: {
@@ -269,26 +269,31 @@ export default {
     for (const m of reps) {
       const k = K(m.name), c = m.sh.caucus;
       if (/^Centrist Reform Alliance/.test(m.party)) {
-        if (k === SO) { m.party = "Centrist Reform Alliance (winding up)"; m.note = "Stayed in the Alliance when the other members left (jiji.com, 24 September 2026)"; }
+        if (k === SO) { m.party = "Centrist Reform Alliance (winding up)"; m.note = "Stayed in the Alliance to wind up the party when the other members left (kumanichi.com, NHK)"; }
         else if (k === OSHIMA) { m.party = "Independent (Chūdō caucus)"; m.note = "Did not join the Democratic Reform Party; joined the unified Chūdō caucus (jiji.com, 24 September 2026)"; relabel.independentCaucus++; }
-        else if (k === IZUMI) { m.party = "Independent"; m.note = "Did not join the Democratic Reform Party (sakigake.jp, jiji.com)"; }
+        else if (k === IZUMI) { m.party = noCaucus(c) ? "Independent (no caucus)" : `Independent (${CAUCUS_EN[c] || c} caucus)`; m.note = `Did not join the Democratic Reform Party (sakigake.jp, jiji.com); caucus ${c} on the Shugiin list (28 September 2026)`; relabel.independentCaucus++; }
         else if (c === "中道") { m.party = "Komeito"; m.note = "Komeito-origin member; Komeito approved the return of 28 such members on 24 September 2026 (jiji.com)"; relabel.komeito++; }
         else { m.party = "Independent (no caucus)"; m.note = "Listed without a caucus on the Shugiin list (28 September 2026); party not stated"; relabel.independentNoCaucus.push(m.name); }
       } else if (m.party === "Independent" && !noCaucus(c)) { m.party = `Independent (${CAUCUS_EN[c] || c} caucus)`; relabel.independentCaucus++; }
     }
+    for (const m of reps) if (!m.note && !/^Independent/.test(m.party) && noCaucus(m.sh.caucus)) m.note = "Listed without a caucus on the Shugiin list (28 September 2026)";
     const spk = await person("Speaker of the House of Representatives (Japan)");
     const spkMember = reps.find((m) => K(m.name) === K(spk.name));
     if (spkMember && noCaucus(spkMember.sh.caucus)) { spkMember.party = "Independent (Speaker)"; spkMember.note = "Listed without a caucus on the Shugiin list (28 September 2026), as Speakers conventionally are"; }
+    spk.bio = "Eisuke Mori is the Speaker of the House of Representatives. The Shugiin member list of 28 September 2026 shows him without a caucus, as Speakers conventionally are.";
     spk.party = spkMember?.party || ""; spk.ref = spkMember?.ref;
     if (spkMember?.note) spk.note = spkMember.note;
+    headOfGov.bio = "Sanae Takaichi is the Prime Minister of Japan and president of the Liberal Democratic Party.";
     headOfGov.party = reps.find((m) => m.title === headOfGov.title)?.party || norm(await partyOfPage(headOfGov.title));
     const repTally = reps.reduce((a, m) => ((a[m.party] = (a[m.party] || 0) + 1), a), {});
     console.log("former Alliance members: DRP", drpMoved, "| Komeito", relabel.komeito, "| independent in a caucus", relabel.independentCaucus, "| independent, no caucus:", relabel.independentNoCaucus.join(", ") || "none", "| Speaker:", spk.name, spk.party);
     console.log("representative parties:", JSON.stringify(repTally));
-    const drpNote = `The Centrist Reform Alliance broke up in September 2026: its members are labelled from the Democratic Reform Party's member list and the Shugiin's caucus column (${drpMoved} Democratic Reform, ${relabel.komeito} Komeito, the rest independent or still in the Alliance); the exact dissolution date was not confirmed`;
+    const drpNote = `The Centrist Reform Alliance broke up in September 2026: its members are labelled from the Democratic Reform Party's member list and the Shugiin's caucus column (${drpMoved} Democratic Reform, ${relabel.komeito} Komeito, the rest independent or still in the Alliance)`;
     const lowerVacant = 465 - shRows.length;
-    const lowerNote = `House of Representatives: ${shRows.length} sitting and ${lowerVacant} vacant on the Shugiin's member list of 28 September 2026${removedReps.length ? `; ${removedReps.join(", ")} (reported dead on 17 September 2026 by the Hokkaido Shimbun) is no longer listed` : ""}`;
+    const lowerNote = `House of Representatives: ${shRows.length} sitting and ${lowerVacant} vacant on the Shugiin's member list of 28 September 2026${removedReps.length ? `; ${removedReps.join(", ")} died on 17 September 2026 (Hokkaido Shimbun) and is no longer listed` : ""}`;
     const lower = { members: reps, official: { count: shRows.length, source: "https://www.shugiin.go.jp/internet/itdb_annai.nsf/html/statics/syu/1giin.htm (and 2giin to 10giin), as of 28 September 2026" }, leader: spk, others: [] };
+    { const dm = reps.find((m) => K(m.name) === K("Keiichi Ishii"));
+      if (dm) lower.others.push({ title: "Keiichi Ishii", name: dm.name, role: "Deputy Speaker", since: "2026-02-18", party: dm.party, ref: dm.ref, note: "Deputy Speaker; Komeito-origin member (kumanichi.com, 11 September 2026); listed without a caucus" }); }
 
     // House of Councillors
     const { $: cs, tables: cst } = await allTables("List of current senators of Japan", 3);
@@ -326,10 +331,10 @@ export default {
     for (const m of councillors) { const r = (sgByKey.get(jaNameKey(m.name)) || []).find((x) => !sgUsed.has(x)); if (r) { sgUsed.add(r); m.sg = r; } else cUnmatched.push(m); }
     console.log("councillors not on the current Sangiin list (removed):", cUnmatched.map((m) => `${m.name} (${m.party}, ${m.seat})`).join("; ") || "none", "| Sangiin members not matched:", sgMembers.filter((x) => !sgUsed.has(x)).map((x) => x.kanji).join(", ") || "none");
     partialMatch({ unmatched: cUnmatched }, sgMembers, sgUsed, "sg");
-    // Name-order or stage-name differences confirmed by hand against the Sangiin list (kanji): Saya = Shioiri Sayaka, Takumi Shibata, LaSalle Ishii; Makoto Kage is paired with 古賀千景 only because they are the single unmatched CDP proportional-representation record on each side (name unverified).
-    for (const [en, kj] of [["Saya", "塩入清香"], ["Shibata Takumi", "柴田巧"], ["LaSalle Ishii", "ラサール石井[石井朗夫]"], ["Makoto Kage", "古賀千景"]]) {
+    // Name-order or stage-name differences confirmed by hand against the Sangiin list (kanji): Saya = Shioiri Sayaka, Takumi Shibata, LaSalle Ishii; Wikipedia lists the Constitutional Democratic Party proportional-representation member of the Class of 2022 as "Makoto Kage", but the Sangiin list names her 古賀千景 (Chikage Koga), so she is renamed from the official list.
+    for (const [en, kj, rename] of [["Saya", "塩入清香"], ["Shibata Takumi", "柴田巧"], ["LaSalle Ishii", "ラサール石井[石井朗夫]"], ["Makoto Kage", "古賀千景", "Chikage Koga"]]) {
       const m = cUnmatched.find((x) => x.name === en), r = sgMembers.find((x) => x.kanji === kj && !sgUsed.has(x));
-      if (m && r) { sgUsed.add(r); m.sg = r; cUnmatched.splice(cUnmatched.indexOf(m), 1); console.log(`  matched by hand: ${en} = ${kj}`); }
+      if (m && r) { if (rename) { m.name = rename; m.title = undefined; m.wiki = null; m.image = null; m.matchedBy = "official-list"; } sgUsed.add(r); m.sg = r; cUnmatched.splice(cUnmatched.indexOf(m), 1); console.log(`  matched by hand: ${en} = ${kj}`); }
     }
     console.log("  unmatched Sangiin records:", JSON.stringify(sgMembers.filter((x) => !sgUsed.has(x)).map((x) => [x.kanji, x.caucus, x.seat])));
     console.log("councillors not on the current Sangiin list after partial matching (removed):", cUnmatched.map((m) => `${m.name} (${m.party}, ${m.seat})`).join("; ") || "none", "| Sangiin members not matched:", sgMembers.filter((x) => !sgUsed.has(x)).map((x) => x.kanji).join(", ") || "none");
@@ -345,7 +350,9 @@ export default {
     console.log("councillors relabelled: now independent, no caucus:", cRelabel.none.join("; ") || "none", "| independents in a caucus:", cRelabel.caucus.join(", ") || "none");
     const presMember = councillors.find((m) => jaNameKey(m.name) === jaNameKey(nm(pl?.title, T(cs, prow[1]))));
     const upper = { members: councillors, official: { count: sgMembers.length, source: `${SANGIIN} (${sgAsOf})` }, leader: { title: pl?.title, name: nm(pl?.title, T(cs, prow[1])), party: presMember?.party || pf(cs, prow[2]), since: "", ref: presMember?.ref }, others: [] };
-    const upperNote = `House of Councillors: ${sgMembers.length} sitting (${248 - sgMembers.length} vacant) on the Sangiin's own list${sgAsOf ? " (" + sgAsOf + ")" : ""}${removedCouncillors.length ? `; ${removedCouncillors.join(", ")} is no longer listed` : ""}`;
+    const upperNote = `House of Councillors: ${sgMembers.length} sitting (${248 - sgMembers.length} vacant) on the Sangiin's own list${sgAsOf ? " (" + sgAsOf + ")" : ""}${removedCouncillors.length ? (removedCouncillors.join() === "Masaaki Yamazaki" ? "; Masaaki Yamazaki (Fukui, LDP) died on 13 November 2026 (NHK) and is no longer listed" : `; ${removedCouncillors.join(", ")} is no longer listed`) : ""}`;
+    { const vm = councillors.find((m) => jaNameKey(m.name) === jaNameKey("Tetsuro Fukuyama"));
+      if (vm) upper.others.push({ title: "Tetsuro Fukuyama", name: vm.name, role: "Vice-President of the House of Councillors", since: "", party: vm.party, ref: vm.ref }); }
     console.log("president of councillors", upper.leader.name);
     const partyByTitle = new Map([...reps, ...councillors].filter((m) => m.title).map((m) => [m.title, m.party]));
     for (const m of ministers) m.party = partyByTitle.get(m.title) || norm(await partyOfPage(m.title));

@@ -55,7 +55,9 @@ Every build fails (no file written without `--force`) if any of these break:
 4. **Head is not a minister:** a head of state or government must not also appear as a minister card.
 5. **Text hygiene:** no string field may end in a comma, semicolon or colon, or contain glued words (a lowercase letter run immediately followed by an uppercase one, e.g. "SolidaritésMinistre").
 6. **No scraper leftovers:** no "N years ago", "(date as given in the party's…" or `[1]`-style footnote text in any field.
-7. The structural checks: unique ids, a name and a `card` on every office, no placeholder or glued names, text on every node.
+7. **Neutral tone:** scraped bios, blurbs and notes must not contain loaded labels ("far-right", "far-left", "revisionist", "extremist", "populist" and similar); set a short hand-written `bio` on the person instead.
+8. **No guessing:** a list member matched only "by elimination" (the one left over on each side) fails the build; match by name, id or an official record.
+9. The structural checks: unique ids, a name and a `card` on every office, no placeholder or glued names, text on every node.
 
 ## Spec fields (declarative text, written by hand)
 

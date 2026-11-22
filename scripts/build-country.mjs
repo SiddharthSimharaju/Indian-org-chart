@@ -39,7 +39,7 @@ async function build(id) {
     const s = (o?.title && sums[o.title]) || {};
     return {
       name: o?.name || s.title?.replace(/\s*\(.*\)$/, "") || "",
-      image: o?.image || s.image || thumbOf[o?.title] || null, blurb: s.description || o?.blurb || "", bio: s.extract || o?.bio || "", wiki: s.url || o?.wiki || (o?.title ? wikiUrl(o.title) : null),
+      image: o?.image || s.image || thumbOf[o?.title] || null, blurb: s.description || o?.blurb || "", bio: o?.bio ?? s.extract ?? "", wiki: s.url || o?.wiki || (o?.title ? wikiUrl(o.title) : null),
       ...(o?.ref ? { ref: o.ref } : {}),
       party: o?.party || "", since: o?.since || "", ...(o?.constituency ? { constituency: o.constituency } : {}), ...(o?.note ? { note: o.note } : {}), ...extra,
     };
@@ -219,6 +219,16 @@ async function build(id) {
     for (const [party, info] of Object.entries(partyInfo)) { bad(`partyInfo ${party}`, info[0]); bad(`partyInfo ${party}`, info[1]); }
     for (const party of Object.keys(partyColors)) bad(`partyColors key`, party);
   }
+  // Generic check 7: neutral tone. Scraped bios and blurbs must not carry loaded political labels; replace them with a short hand-written bio (`bio` on the person) instead.
+  { const LOADED = /\b(far[- ]?right|far[- ]?left|ultra[- ]?nationalist|ultranationalist|revisionis[mt]|extremis[mt]|populis[mt]|fascis[mt]|neo-?nazi|radical right|hard[- ]?line|demagogue)\b/i;
+    for (const n of all) {
+      if (n.person) for (const k of ["bio", "blurb", "note"]) if (LOADED.test(n.person[k] || "")) errors.push(`${n.id}.person.${k}: loaded wording "${(n.person[k].match(LOADED) || [])[0]}" (write a neutral hand-written bio instead)`);
+      for (const m of n.members || []) if (LOADED.test(m.blurb || "") || LOADED.test(m.note || "")) errors.push(`${n.id} member ${m.name}: loaded wording in blurb/note`);
+    }
+    for (const [party, info] of Object.entries(partyInfo)) if (LOADED.test(info[1] || "")) errors.push(`partyInfo ${party}: loaded wording "${(info[1].match(LOADED) || [])[0]}"`);
+  }
+  // Generic check 8: no list member may be matched "by elimination" (the one left over on each side); a person is matched by name, id or an official record, never by guessing.
+  for (const m of members) if (m.matchedBy === "elimination") errors.push(`${m.name}: matched only by elimination`);
   // Generic check 4: the head of state or government must not also appear as a minister card.
   { const heads = new Set([data.headOfState, data.headOfGov].filter(Boolean).map((h) => nameKeyOf(h.name)));
     for (const m of data.ministers || []) if (heads.has(nameKeyOf(m.name))) errors.push(`${m.name} is both a head of state/government and a minister card`); }

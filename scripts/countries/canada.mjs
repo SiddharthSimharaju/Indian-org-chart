@@ -57,6 +57,7 @@ export default {
     "Canadian Senators Group": ["Canadian Senators Group", "A group of senators who sit independently of any party."],
     "Progressive Senate Group": ["Progressive Senate Group", "A group of senators who sit independently of any party."],
     "Non-affiliated": ["Non-affiliated", "Not a member of a party or recognised Senate group."],
+    "Government Representative's Office": ["Government Representative's Office", "The office of the Government Representative, who speaks for the federal government in the Senate. It is a Senate office, not a political party."],
   },
 
   headOfState: {
@@ -242,7 +243,7 @@ export default {
     const loo = await person("Leader of the Opposition (Canada)");
     const commons = {
       members, official: { count: officialSitting, source: "https://www.ourcommons.ca/members/en/party-standings (member list: https://www.ourcommons.ca/Members/en/search/csv)" },
-      leader: { ...(find(spk.name) || spk), title: spk.title, name: spk.name, party: find(spk.name)?.party || "", since: "", note: "Speaker per Wikipedia; the role and start date could not be confirmed on ourcommons.ca" },
+      leader: { ...(find(spk.name) || spk), title: spk.title, name: spk.name, party: find(spk.name)?.party || "", since: "2025-05-26", note: "Elected Speaker on 26 May 2025 (Journals of the House of Commons, 45th Parliament, 1st session, No. 1)" },
       others: [{ ...(find(loo.name) || loo), name: loo.name, party: find(loo.name)?.party || "Conservative", role: "Leader of the Opposition" }],
     };
 
@@ -311,6 +312,9 @@ export default {
       const party = /consensus|^none\b/i.test(rawParty) || !rawParty ? "Non-partisan" : norm(rawParty); // NWT and Nunavut use consensus government
       const head = { title: L.title, name: nm(L.title, L.text), party, since: "" };
       if (name === "British Columbia") head.since = "2026-11-20"; // Global News, 20 Nov 2026: "Lorne Doerkson becomes B.C.'s 38th premier" https://globalnews.ca/news/12159369/
+      // Hand-written neutral bios replace Wikipedia extracts that carry loaded labels (builder check 7).
+      const NEUTRAL = { "Doug Ford": "Doug Ford is the Premier of Ontario and leader of the Progressive Conservative Party of Ontario.", "Scott Moe": "Scott Moe is the Premier of Saskatchewan and leader of the Saskatchewan Party." };
+      if (NEUTRAL[head.name]) head.bio = NEUTRAL[head.name];
       return { name, code: CODES[name], capital: CAPITALS[name], head };
     }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
     console.log("premiers", regions.length, "| consensus-government premiers:", regions.filter((r) => r.head.party === "Non-partisan").map((r) => r.name).join(", "));
