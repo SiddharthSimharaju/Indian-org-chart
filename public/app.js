@@ -15,6 +15,10 @@ const P = {
   expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   collapse: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',
+  chevronr: '<path d="M9 6l6 6-6 6"/>',
+  clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 3h5"/>',
+  checkc: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+  arrowr: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   external: '<path d="M7 17L17 7M8 7h9v9"/>',
   back: '<path d="M15 6l-6 6 6 6"/>',
@@ -43,7 +47,7 @@ const P = {
 const icon = (n) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${P[n] || ""}</svg>`;
 const nodeIcon = (n) => C.nodeIcon(n);
 const tileColor = (n) => C.tileColor(n);
-const MARK = '<svg viewBox="0 0 32 32" fill="none" stroke="#0b7df2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="11" y="3" width="10" height="7" rx="2"/><path d="M16 10v6M7 16h18M7 16v4M25 16v4"/><rect x="3" y="20" width="8" height="8" rx="2"/><rect x="21" y="20" width="8" height="8" rx="2"/></svg>';
+const MARK = '<svg viewBox="0 0 32 32" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="11"/><path d="M5 16h22M16 5c3.4 3.1 5 6.7 5 11s-1.6 7.9-5 11c-3.4-3.1-5-6.7-5-11s1.6-7.9 5-11z"/></svg>';
 
 /* ---------- State ---------- */
 let C, DATA, PARTY = {}; // C: active country config
@@ -420,7 +424,7 @@ function showPanel() {
   if (p?.party) tags.push(`<span class="tag party" style="--pc:${partyColor(p.party)}"><i></i>${esc(p.party)}</span>`);
   if (p?.since) tags.push(`<span class="tag">In office since ${esc(p.since)}</span>`);
   if (!p && n.stats?.[0]) tags.push(`<span class="tag">${esc(n.stats[0].label)}: ${esc(n.stats[0].value)}</span>`);
-  { const g = govStatus(n, p); if (g) tags.push(`<span class="tag ${g.ok ? "ok" : ""}">${esc(g.tag)}</span>`); }
+  { const g = govStatus(n, p); if (g) tags.push(`<span class="tag ${g.ok ? "ok" : ""}">${g.ok ? icon("checkc") : ""}${esc(g.tag)}</span>`); }
   if (p?.note) tags.push(`<span class="tag warn">${esc(p.note)}</span>`);
 
   const tabs = [["overview", "Overview"]];
@@ -546,7 +550,9 @@ function initSearch() {
   });
   box.addEventListener("click", (e) => { const r = e.target.closest(".result"); if (r) pick(box._hits[+r.dataset.i]); });
   document.addEventListener("click", (e) => { if (!e.target.closest("#search")) hideResults(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); q.focus(); } });
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "/" && document.activeElement.tagName !== "INPUT") || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")) { e.preventDefault(); q.focus(); q.select(); }
+  });
 }
 
 /* ---------- List view ---------- */
@@ -611,7 +617,7 @@ async function loadCountry(id, hash = "") {
   $('meta[name="description"]')?.setAttribute("content", C.description);
   $("#q").placeholder = C.searchPlaceholder;
   $("#subtitle").textContent = "Loading…";
-  $("#countryFlag").textContent = C.flag; $("#countryName").textContent = C.name;
+  $("#countryFlag").textContent = C.flag; $("#countryName").textContent = C.name; $("#crumbCountry").textContent = C.name;
   markCountry();
   $("#loading")?.remove();
   $("#stage").insertAdjacentHTML("beforeend", `<div class="loading" id="loading">${esc(C.loading)}</div>`);
@@ -630,6 +636,7 @@ async function loadCountry(id, hash = "") {
   $('meta[name="description"]')?.setAttribute("content", C.description);
   index(DATA.root); buildSearch(); expanded.add(C.rootId);
   $("#subtitle").textContent = C.subtitle(nodes);
+  $("#bannerText").textContent = `Names and offices come from Wikipedia and official sources as of ${new Date(DATA.generatedAt).toLocaleDateString(C.locale, { day: "numeric", month: "short", year: "numeric" })}. Offices change, so check the linked article for anything important.`;
   if (view === "list") renderList(); else { render(); fit(false); }
   if (hash && nodes.has(hash)) select(hash, null, { center: true });
 }
@@ -667,11 +674,19 @@ function initCountryMenu() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { close(); btn.focus(); } });
 }
 
+function initBanner() {
+  const b = $("#banner");
+  $("#kbd").textContent = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl K";
+  if (safe(() => localStorage.getItem("poc-banner")) !== "1") b.hidden = false;
+  $("#bannerX").onclick = () => { b.hidden = true; safe(() => localStorage.setItem("poc-banner", "1")); requestAnimationFrame(() => fit(false)); };
+}
+
 /* ---------- Boot ---------- */
 async function boot() {
   document.querySelectorAll("[data-icon]").forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
   $("#brandMark").innerHTML = MARK;
   await loadManifest();
+  initBanner();
   initCountryMenu(); initPanZoom(); initMinimap(); initSearch();
   track("pageloads");
   visitorCount().then((n) => { if (n == null) return; const v = $("#visitors"); v.textContent = `${n.toLocaleString()} ${n === 1 ? "visitor" : "visitors"}`; v.hidden = false; });

@@ -1,6 +1,6 @@
 // United States: everything country-specific the chart needs. Plain-English text states constitutional facts only; no opinions.
 
-const MAJORITY_H = ["Majority mark", "218 of 435 voting seats in the House. The party that holds it elects the Speaker and controls the agenda."];
+const MAJORITY_H = ["Majority mark", "218 of 435 voting seats when every seat is filled (fewer when seats are vacant). The party that holds it elects the Speaker and controls the agenda."];
 const PLURALITY = ["First-past-the-post", "The candidate with the most votes in a district wins, even without a majority of all votes."];
 const DISTRICT = ["District", "The geographic area whose voters elect one representative."];
 const VETO = ["Veto", "The President or a governor can reject a bill. The legislature can override it, usually with a two-thirds vote."];
@@ -14,8 +14,8 @@ const EXPLAIN = {
     terms: [["Electoral College", "538 electors, allocated to states by population, who formally choose the President after the popular vote in each state."], VETO, ["Impeachment", "A formal charge brought by the House. The Senate then holds the trial."]],
   },
   vp: {
-    plain: "Elected on the same ticket as the President. Presides over the Senate and casts the deciding vote when it is tied 50-50. If the President dies, resigns or is removed, the Vice President becomes President.",
-    facts: [["Term", "4 years"], ["Chosen by", "The Electoral College, on the President's ticket"], ["Real power", "Mostly the tie-breaking Senate vote and succession"]],
+    plain: "Runs on the same ticket as the President, although electors vote separately for each office (12th Amendment). Presides over the Senate and casts the deciding vote when it is tied 50-50. If the President dies, resigns or is removed, the Vice President becomes President.",
+    facts: [["Term", "4 years"], ["Chosen by", "The Electoral College, on the President's ticket"], ["Constitutional roles", "Presides over the Senate (Art. I, s. 3) and votes only to break ties; first in line of succession"]],
   },
   secretary: {
     plain: "Heads a federal department or agency, such as State, Defense or Treasury, and advises the President as part of the Cabinet. Each is nominated by the President and must be confirmed by a majority of the Senate.",
@@ -33,7 +33,7 @@ const EXPLAIN = {
     terms: [CONFIRM, ["Filibuster", "A tactic of extended debate that can block a vote. Ending it normally takes 60 senators."]],
   },
   rep: {
-    plain: "Elected by the voters of one congressional district to sit in the House of Representatives. Representatives write and pass federal laws together with the Senate, and every spending bill must start in the House. Delegates from D.C. and the territories can debate and serve on committees but cannot vote on the final passage of bills.",
+    plain: "Elected by the voters of one congressional district to sit in the House of Representatives. Representatives write and pass federal laws together with the Senate. Under Article I, Section 7, bills that raise revenue (taxes) must start in the House; by custom, spending bills start there too. Delegates from D.C. and the territories can debate and serve on committees but cannot vote on the final passage of bills.",
     facts: [["Term", "2 years"], ["Chosen by", "Voters of one congressional district"], ["Must be", "At least 25 years old and a citizen for 7 years"]],
     terms: [DISTRICT, PLURALITY, ["Midterm election", "The House election held halfway through a President's term."]],
   },
@@ -85,7 +85,7 @@ const EXPLAIN = {
     terms: [["Bicameral", "Having two chambers."], ["Congress (numbered)", "Each two-year term is a numbered Congress. The one elected in 2024 is the 119th."]],
   },
   "house-reps": {
-    plain: "The larger chamber of Congress, with 435 voting members spread among the states according to population and re-elected every two years. All spending bills start here, and it holds the power to impeach.",
+    plain: "The larger chamber of Congress, with 435 voting members spread among the states according to population and re-elected every two years. Bills that raise revenue must start here (Article I, Section 7), and it holds the power to impeach.",
     terms: [MAJORITY_H, DISTRICT, ["Reapportionment", "Redistributing the 435 seats among the states after each 10-year census."]],
   },
   senate: {
@@ -101,7 +101,7 @@ const EXPLAIN = {
     terms: [["Judicial review", "The power of courts to strike down laws that conflict with the Constitution."]],
   },
   states: { plain: "The 50 states each have their own constitution and a government with the same three branches: a governor, a legislature and courts. Under the 10th Amendment, powers the Constitution does not give to the federal government stay with the states and the people." },
-  territories: { plain: "Washington, D.C. is the federal capital district and is governed under authority granted by Congress. Five inhabited territories (Puerto Rico, Guam, the U.S. Virgin Islands, American Samoa and the Northern Mariana Islands) have their own elected governors but no voting members in Congress and no electoral votes for President, except that residents of D.C. do vote for President." },
+  territories: { plain: "Washington, D.C. is the federal capital district and is governed under authority granted by Congress. Five inhabited territories (Puerto Rico, Guam, the U.S. Virgin Islands, American Samoa and the Northern Mariana Islands) have their own elected governors but no voting members in Congress. Residents of D.C. vote for President (23rd Amendment); residents of the territories do not." },
   region: { plain: "The four regions the U.S. Census Bureau uses to group states. Used here only to organise the chart; they have no government of their own." },
   state: { plain: "One of the 50 states. Each has an elected governor, a legislature and its own courts. This card lists the state's main elected officials and the two chambers of its legislature." },
   stateLeg: { plain: "One chamber of a state's law-making body. State legislatures write state law, pass the state budget and decide on matters such as education, policing and local taxes." },
@@ -109,12 +109,12 @@ const EXPLAIN = {
 };
 
 export const PARTY_INFO = {
-  Democratic: ["Democratic Party", "One of the two major parties; its roots go back to the 1820s. Generally centre-left to left: favours a larger role for government in health care, education and the economy."],
-  Republican: ["Republican Party", "One of the two major parties, founded in 1854. Generally centre-right to right: favours lower taxes, smaller federal government and traditional social values."],
+  Democratic: ["Democratic Party", "One of the two major parties. It traces its origins to the 1820s."],
+  Republican: ["Republican Party", "One of the two major parties. It was founded in 1854."],
   Independent: ["Independent", "Not a member of a political party. Independents in Congress usually join one party's caucus to get committee assignments."],
   Nonpartisan: ["Nonpartisan", "Nebraska's one-chamber legislature is officially nonpartisan: candidates run without party labels on the ballot."],
   Libertarian: ["Libertarian Party", "Founded in 1971. Stresses individual liberty, limited government and free markets."],
-  Progressive: ["Vermont Progressive Party", "A left-leaning state party, mainly active in Vermont."],
+  Progressive: ["Vermont Progressive Party", "A state political party, mainly active in Vermont."],
 };
 
 const ICONS = { president: "flag", vp: "landmark", secretary: "briefcase", justice: "scale", senator: "landmark", rep: "vote", governor: "shield", ltgov: "shield", mayor: "building", statesen: "landmark", staterep: "vote" };

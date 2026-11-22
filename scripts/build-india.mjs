@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { pageHtml, grid, clean, links, summaries, descriptions } from "./wiki.mjs";
 import { ministers, mlasByDistrict, parliament, thumbs, wikiUrl } from "./depth.mjs";
-import { STATES, UTS, REGION_BLURB, ELECTED_BY, PARTY_COLORS } from "./static-facts.mjs";
+import { STATES, UTS, REGION_BLURB, ELECTED_BY, PARTY_COLORS, hueColor } from "./static-facts.mjs";
 
 const PARTY_CODES = {
   "bharatiya janata party": "BJP", "indian national congress": "INC", "janata dal (united)": "JD(U)", "aam aadmi party": "AAP", "nationalist congress party": "NCP",
@@ -15,7 +15,9 @@ const PARTY_CODES = {
   "all india united democratic front": "AIUDF", "asom gana parishad": "AGP", "united people's party liberal": "UPPL", "bodoland people's front": "BPF", "indian national lok dal": "INLD", "jannayak janta party": "JJP",
   "hindustani awam morcha": "HAM", "rashtriya lok morcha": "RLM", "apna dal (soneylal)": "AD(S)", "nishad party": "NISHAD", "suheldev bharatiya samaj party": "SBSP", "puducherry all india n.r. congress": "AINRC", "all india n.r. congress": "AINRC",
 };
-const shortParty = (t) => { const n = (t || "").replace(/\s*\(since.*$/, "").replace(/\s*\(\d{4}.*$/, "").split(/,|;/)[0].trim(); return PARTY_CODES[n.toLowerCase()] || n; };
+// Labels that are certainly the same party under two spellings are merged; "Party" is a table header, not a party.
+const PARTY_ALIAS = { "SS(UBT)": "SHS(UBT)", "NCP-SP": "NCP(SP)", "Independent politician": "IND", Ind: "IND", "Mizo National Front": "MNF", Party: "" };
+const shortParty = (t) => { const n = (t || "").replace(/\s*\(since.*$/, "").replace(/\s*\(\d{4}.*$/, "").split(/,|;/)[0].trim(); const c = PARTY_CODES[n.toLowerCase()] || n; return c in PARTY_ALIAS ? PARTY_ALIAS[c] : c; };
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 const stripTenure = (s) => s.replace(/\s*\(.*$/, "").replace(/\s+\d+\s*years?.*$/, "").replace(/\s+\d+\s*days?.*$/, "").trim();
 
@@ -141,9 +143,28 @@ const depthTitles = Object.values(depth).flatMap((d) => [...d.ministers, ...Obje
 const dedupe = (arr) => { const m = new Map(); arr.forEach((x) => m.set(x.state + "|" + (x.constituency || x.name), x)); return [...m.values()]; };
 const lsAll = dedupe(await parliament("ls")), rsAll = await parliament("rs");
 console.log("parliament", lsAll.length, rsAll.length);
+// Ministers whose table has no party column take it from their own MLA / MP entry (matched by Wikipedia title), or from the Chief Minister's row.
+{
+  const byTitle = new Map();
+  for (const d of Object.values(depth)) for (const m of Object.values(d.districts || {}).flat()) if (m.title && m.party) byTitle.set(m.title, m.party);
+  for (const m of [...lsAll, ...rsAll]) if (m.title && m.party && !byTitle.has(m.title)) byTitle.set(m.title, m.party);
+  for (const [st, cm] of Object.entries(cms)) if (cm.title && cm.party) byTitle.set(cm.title, cm.party);
+  let before = 0, after = 0;
+  for (const d of Object.values(depth)) for (const m of d.ministers) { if (!m.party) { before++; if (m.title && byTitle.has(m.title)) m.party = byTitle.get(m.title); else after++; } }
+  console.log("ministers without a party: before the lookup", before, "| after", after);
+}
 const depthThumbs = await thumbs([...depthTitles, ...lsAll.map((m) => m.title), ...rsAll.map((m) => m.title)].filter(Boolean), 120);
 const descOf = await descriptions([...depthTitles, ...lsAll.map((m) => m.title), ...rsAll.map((m) => m.title)]);
-const parl = (m, kind) => ({ mirror: true, name: m.name.replace(/\s*\(.*\)$/, ""), image: depthThumbs[m.title] || null, blurb: descOf[m.title] || "", bio: "", wiki: m.title ? wikiUrl(m.title) : null, party: shortParty(m.party || ""), since: m.since || "", constituency: kind === "ls" ? m.constituency : "", role: kind === "ls" ? `${m.constituency} · ${m.state}` : `${m.state}${m.field ? " · " + m.field : ""}` });
+// A Wikipedia match for a legislator or minister is accepted only when its one-line description is a political one and not a disambiguation page; otherwise image, blurb and link stay empty (no guess).
+const POLITICAL = /politic|legislat|minister|\b(senator|member of|mla|mp|speaker|mayor|governor|chief minister)\b/i;
+const DISAMBIG = /topics? referred|disambig|may refer to/i;
+const acceptWiki = (t) => { if (!t) return false; if ((titleUse.get(t) || 0) > 1) { ambiguous.add(t); return false; } return POLITICAL.test(descOf[t] || "") && !DISAMBIG.test(descOf[t] || ""); };
+// A Wikipedia title that the tables attach to more than one legislator seat is ambiguous (different people, or a stale list): none of those cards gets a link, image or blurb.
+const titleUse = new Map();
+for (const m of [...Object.values(depth).flatMap((d) => Object.values(d.districts || {}).flat()), ...lsAll, ...rsAll]) if (m.title) titleUse.set(m.title, (titleUse.get(m.title) || 0) + 1);
+const rejected = new Set(), ambiguous = new Set();
+const okWiki = (t) => { const ok = acceptWiki(t); if (t && !ok) rejected.add(t); return ok; };
+const parl = (m, kind) => ({ mirror: true, name: m.name.replace(/\s*\(.*\)$/, ""), image: (okWiki(m.title) && depthThumbs[m.title]) || null, blurb: okWiki(m.title) ? descOf[m.title] || "" : "", bio: "", wiki: acceptWiki(m.title) ? wikiUrl(m.title) : null, party: shortParty(m.party || ""), since: m.since || "", constituency: kind === "ls" ? m.constituency : "", role: kind === "ls" ? `${m.constituency} · ${m.state}` : `${m.state}${m.field ? " · " + m.field : ""}` });
 
 // ---------- 2. Images + bios ----------
 const titles = [
@@ -160,7 +181,7 @@ const person = (o, extra = {}) => {
   const s = (o.title && sums[o.title]) || {};
   return {
     name: s.title?.replace(/\s*\(.*\)$/, "") || o.name,
-    image: s.image || null, blurb: s.description || "", bio: s.extract || "", wiki: s.url || (o.title ? "https://en.wikipedia.org/wiki/" + encodeURIComponent(o.title.replace(/ /g, "_")) : null),
+    image: s.image || null, blurb: s.description || "", ...(o.bio ? { bio: o.bio, bioHand: true } : { bio: "" }), wiki: s.url || (o.title ? "https://en.wikipedia.org/wiki/" + encodeURIComponent(o.title.replace(/ /g, "_")) : null),
     party: o.party || "", since: o.since || "", ...extra,
   };
 };
@@ -208,7 +229,7 @@ function stateNode(name, isUT) {
     stats: [FACT("Capital", facts.capital), FACT("Lok Sabha seats", facts.ls), ...(facts.rs ? [FACT("Rajya Sabha seats", facts.rs)] : [])],
   });
   const dp = depth[name];
-  const asMember = (m) => ({ name: m.name.replace(/\s*\(.*\)$/, ""), image: depthThumbs[m.title] || null, blurb: descOf[m.title] || "", bio: "", wiki: m.title ? wikiUrl(m.title) : null, party: shortParty(m.party || ""), since: m.since || "", role: m.role || "", constituency: m.constituency || "" });
+  const asMember = (m) => ({ name: m.name.replace(/\s*\(.*\)$/, ""), image: (okWiki(m.title) && depthThumbs[m.title]) || null, blurb: acceptWiki(m.title) ? descOf[m.title] || "" : "", bio: "", wiki: acceptWiki(m.title) ? wikiUrl(m.title) : null, party: shortParty(m.party || ""), since: m.since || "", role: m.role || "", constituency: m.constituency || "" });
   if (cm) {
     const dcms = (deputies[name] || []).map((d) => person(d, { role: "Deputy Chief Minister" }));
     const cmNode = mk(`cm-${slug(name)}`, "office", "Chief Minister", {
@@ -373,6 +394,57 @@ const missing = [];
 (function walk(n) { if (n.person && !n.person.image) missing.push(n.id + ":" + n.person.name); n.members?.forEach((m) => !m.image && missing.push("member:" + m.name)); n.children.forEach(walk); })(presidentNode);
 console.log("no image:", missing.length, "of people (Wikipedia has no photo)", missing.slice(0, 5));
 
+// ---- party colours: every party with 5+ people gets one (brand colour where known, else a deterministic hue) ----
+const partyCount = {};
+(function walk(n) { (n.members || []).forEach((m) => m.party && (partyCount[m.party] = (partyCount[m.party] || 0) + 1)); if (n.person?.party && !(n.members && n.members.length > 4)) partyCount[n.person.party] = (partyCount[n.person.party] || 0) + 1; n.children.forEach(walk); })(presidentNode);
+const partyColors = { ...PARTY_COLORS };
+for (const [p, n] of Object.entries(partyCount)) if (n >= 5 && !partyColors[p]) partyColors[p] = hueColor(p);
+const stillUncoloured = Object.entries(partyCount).filter(([p, n]) => n >= 5 && !partyColors[p]);
+console.log("parties:", Object.keys(partyCount).length, "| with colour:", Object.keys(partyCount).filter((p) => partyColors[p]).length, "| coloured by the hue fallback:", Object.keys(partyColors).length - Object.keys(PARTY_COLORS).length, "| Wikipedia matches rejected by the political-descriptor filter:", rejected.size, "| left blank because the title is attached to several seats:", ambiguous.size);
+
+// ---- self-checks (the build fails if any breaks; --force overrides) ----
+const errors = [];
+const LOADED = /\b(far[- ]?right|far[- ]?left|ultra[- ]?nationalist|revisionis[mt]|extremis[mt]|populis[mt]|fascis[mt]|neo-?nazi|radical right|hard[- ]?line|demagogue)\b/i;
+const WRONG_BLURB = /boxer|footballer|topics? referred|may refer to|disambiguation|tennis player/i, IS_POLITICIAN = /politic/i; // "footballer and politician" is a politician
+const GLUED = /[a-zà-ÿ]{3,}[A-ZÀ-Þ][a-zà-ÿ]{2,}/, TRAIL = /[,;:]\s*$/, CODE_NAME = /^[A-Z][A-Z()\-.&]{0,7}$/, PLACEHOLDER = /^(minister|ministers|name|names|portfolio|member|mla|party|vacant|none|tbd|n\/a|unknown)$/i;
+const flat = [];
+(function walk(n) { flat.push(n); n.children.forEach(walk); })(presidentNode);
+for (const n of flat) for (const p of [n.person, ...(n.members || [])].filter(Boolean)) {
+  const w = `${n.id}: ${p.name}`;
+  if (p.bio && !p.bioHand) errors.push(`${w}: bio is not marked hand-written`);
+  if (LOADED.test(p.bio || "") || LOADED.test(p.blurb || "") || LOADED.test(p.note || "")) errors.push(`${w}: loaded wording`);
+  if (WRONG_BLURB.test(p.blurb || "") && !IS_POLITICIAN.test(p.blurb || "")) errors.push(`${w}: wrong-person blurb "${p.blurb}"`);
+  if (!p.name || PLACEHOLDER.test(p.name) || CODE_NAME.test(p.name) || GLUED.test(p.name)) errors.push(`${w}: placeholder, party-code or glued name`);
+  for (const k of ["name", "blurb", "note", "party"]) if (TRAIL.test(p[k] || "") || /\n/.test(p[k] || "")) errors.push(`${w}: trailing punctuation or newline in ${k}`);
+  if (p.party && p.party === p.name) errors.push(`${w}: name equals party`);
+}
+// seat counts per house against static-facts
+{
+  const lsN = lsAll.length, rsN = rsAll.length;
+  if (lsN < 543 * 0.98 || lsN > 543) errors.push(`Lok Sabha: ${lsN} members listed, expected about 543`);
+  if (rsN < 245 * 0.95 || rsN > 245) errors.push(`Rajya Sabha: ${rsN} members listed, expected about 245`);
+  for (const [state, d] of Object.entries(depth)) {
+    const f = STATES[state] || UTS[state]; if (!f?.la || !d.districts) continue;
+    const n = Object.values(d.districts).flat().length;
+    if (n < f.la * 0.9 || n > f.la * 1.1) errors.push(`${state}: ${n} MLAs listed, expected ${f.la} (+/-10%)`);
+  }
+}
+// no person on two legislator cards (a CM who is also an MLA, a PM who is also an MP and an administrator of two UTs are separate non-legislator cards or allow-listed)
+{
+  const ALLOW = new Set(["Praful Khoda Patel", "Praful Patel", "Gulab Chand Kataria"]); // administrators of two UTs / Governor of Punjab and Administrator of Chandigarh
+  const seen = new Map();
+  for (const n of flat) if (["mla", "mp", "rsmp"].includes(n.role)) {
+    const key = n.person.wiki || `${n.person.name}|${n.place}`;
+    if (ALLOW.has(n.person.name)) continue;
+    if (seen.has(key)) errors.push(`${n.id} and ${seen.get(key)} are the same person (${n.person.name})`); else seen.set(key, n.id);
+  }
+  const govSeen = new Map();
+  for (const n of flat) if (["governor", "lg", "admin"].includes(n.role) && n.person?.name) { const k = n.person.wiki || n.person.name; if (govSeen.has(k) && !ALLOW.has(n.person.name)) errors.push(`${n.id} and ${govSeen.get(k)}: same person as governor/administrator (${n.person.name})`); else govSeen.set(k, n.id); }
+}
+// every state and UT has its governor / LG / administrator
+for (const name of [...Object.keys(STATES), ...Object.keys(UTS)]) { const n = flat.find((x) => x.id === `gov-${slug(name)}`); if (!n?.person?.name) errors.push(`${name}: no governor, lieutenant governor or administrator card`); }
+if (errors.length) { console.log(`SELF-CHECK: ${errors.length} problem(s)`); errors.slice(0, 50).forEach((e) => console.log("  ✗ " + e)); if (!process.argv.includes("--force")) { console.log("NOT written (use --force to override)"); process.exit(1); } } else console.log("SELF-CHECK: ok");
+
 fs.mkdirSync("public/data", { recursive: true });
-fs.writeFileSync("public/data/india.json", JSON.stringify({ generatedAt: new Date().toISOString(), source: "Wikipedia (CC BY-SA 4.0)", partyColors: PARTY_COLORS, root: presidentNode }, (k, v) => (v === "" || v === null ? undefined : v)));
+fs.writeFileSync("public/data/india.json", JSON.stringify({ generatedAt: new Date().toISOString(), source: "Wikipedia (CC BY-SA 4.0)", partyColors, root: presidentNode }, (k, v) => (v === "" || v === null ? undefined : v)));
 console.log("wrote public/data/india.json", (fs.statSync("public/data/india.json").size / 1024).toFixed(0) + " KB");

@@ -7,57 +7,72 @@
   <meta name="description" content="Interactive org charts of the political systems of the world: who runs each country, and who answers to whom.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app" id="app">
-    <header class="top">
-      <div class="brand">
-        <span class="brand-mark" id="brandMark" aria-hidden="true"></span>
-        <div>
-          <h1>Political Org Charts</h1>
-          <p id="subtitle">Loading…</p>
-        </div>
-      </div>
-      <div class="country" id="country">
-        <button class="country-btn" id="countryBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a country" title="Choose a country">
-          <span class="flag" id="countryFlag"></span><span id="countryName"></span><span data-icon="chevron"></span>
-        </button>
-        <div class="country-menu" id="countryMenu" role="listbox" aria-label="Countries" hidden></div>
-      </div>
-      <div class="search" id="search">
-        <span data-icon="search"></span>
-        <input id="q" type="search" placeholder="Search a person, state or office" autocomplete="off" aria-label="Search">
-        <div class="results" id="results" hidden></div>
-      </div>
-      <div class="seg" role="tablist" aria-label="View">
-        <button role="tab" id="tabTree" aria-selected="true" data-view="tree" aria-label="Tree view" title="Tree view"><span data-icon="tree"></span></button>
-        <button role="tab" id="tabList" aria-selected="false" data-view="list" aria-label="List view" title="List view"><span data-icon="list"></span></button>
-      </div>
-    </header>
+    <div class="banner" id="banner" hidden>
+      <span data-icon="clock"></span>
+      <p><b>This chart is a snapshot.</b> <span id="bannerText"></span></p>
+      <a class="btn-black" href="https://github.com/SiddharthSimharaju/Indian-org-chart#where-the-data-comes-from" target="_blank" rel="noopener">About the data</a>
+      <button class="banner-x" id="bannerX" aria-label="Dismiss"><span data-icon="close"></span></button>
+    </div>
 
-    <main class="stage" id="stage">
-      <section class="canvas" id="canvas" aria-label="Org chart">
-        <div class="world" id="world">
-          <svg class="edges" id="edges"></svg>
-          <div id="nodes"></div>
+    <div class="body">
+      <nav class="rail" aria-label="Views">
+        <span class="brand-mark" id="brandMark" aria-hidden="true"></span>
+        <div class="seg" role="tablist" aria-label="View">
+          <button role="tab" id="tabTree" aria-selected="true" data-view="tree" aria-label="Tree view" title="Tree view"><span data-icon="tree"></span></button>
+          <button role="tab" id="tabList" aria-selected="false" data-view="list" aria-label="List view" title="List view"><span data-icon="list"></span></button>
         </div>
-        <div class="minimap" id="minimap" aria-hidden="true"><canvas class="mm-canvas" id="mmCanvas"></canvas><div class="mm-view" id="mmView"></div></div>
-        <div class="toolbar" id="toolbar">
-          <button id="zOut" aria-label="Zoom out"><span data-icon="minus"></span></button>
-          <span class="zval" id="zVal">80%</span>
-          <button id="zIn" aria-label="Zoom in"><span data-icon="plus"></span></button>
-          <i class="sep"></i>
-          <button id="fit" aria-label="Fit to screen"><span data-icon="fit"></span></button>
-          <button id="expandAll" aria-label="Expand everything" title="Expand everything"><span data-icon="expand"></span></button>
-          <button id="collapseAll" aria-label="Collapse to top level" title="Collapse to top level"><span data-icon="collapse"></span></button>
-        </div>
-      </section>
-      <section class="listview" id="listview" hidden></section>
-      <div class="visitors" id="visitors" hidden aria-live="polite"></div>
-      <aside class="panel" id="panel" aria-label="Details" aria-hidden="true"></aside>
-    </main>
+        <span class="rail-sp"></span>
+        <a class="rail-btn" href="https://github.com/SiddharthSimharaju/Indian-org-chart" target="_blank" rel="noopener" aria-label="Project on GitHub" title="Project on GitHub"><span data-icon="external"></span></a>
+      </nav>
+
+      <div class="col">
+        <header class="top">
+          <nav class="crumbs" aria-label="Breadcrumb">
+            <span>Political Org Charts</span><span data-icon="chevronr"></span><b id="crumbCountry"></b>
+          </nav>
+          <p class="sub" id="subtitle">Loading…</p>
+          <div class="country" id="country">
+            <button class="country-btn" id="countryBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a country" title="Choose a country">
+              <span class="flag" id="countryFlag"></span><span id="countryName"></span><span data-icon="chevron"></span>
+            </button>
+            <div class="country-menu" id="countryMenu" role="listbox" aria-label="Countries" hidden></div>
+          </div>
+          <div class="search" id="search">
+            <span data-icon="search"></span>
+            <input id="q" type="search" placeholder="Search a person, state or office" autocomplete="off" aria-label="Search">
+            <kbd id="kbd">⌘K</kbd>
+            <div class="results" id="results" hidden></div>
+          </div>
+        </header>
+
+        <main class="stage" id="stage">
+          <section class="canvas" id="canvas" aria-label="Org chart">
+            <div class="world" id="world">
+              <svg class="edges" id="edges"></svg>
+              <div id="nodes"></div>
+            </div>
+            <div class="minimap" id="minimap" aria-hidden="true"><canvas class="mm-canvas" id="mmCanvas"></canvas><div class="mm-view" id="mmView"></div></div>
+            <div class="toolbar" id="toolbar">
+              <button id="zOut" aria-label="Zoom out"><span data-icon="minus"></span></button>
+              <span class="zval" id="zVal">80%</span>
+              <button id="zIn" aria-label="Zoom in"><span data-icon="plus"></span></button>
+              <i class="sep"></i>
+              <button id="fit" aria-label="Fit to screen"><span data-icon="fit"></span></button>
+              <button id="expandAll" aria-label="Expand everything" title="Expand everything"><span data-icon="expand"></span></button>
+              <button id="collapseAll" aria-label="Collapse to top level" title="Collapse to top level"><span data-icon="collapse"></span></button>
+            </div>
+          </section>
+          <section class="listview" id="listview" hidden></section>
+          <div class="visitors" id="visitors" hidden aria-live="polite"></div>
+          <aside class="panel" id="panel" aria-label="Details" aria-hidden="true"></aside>
+        </main>
+      </div>
+    </div>
   </div>
   <script type="module" src="app.js"></script>
 </body>

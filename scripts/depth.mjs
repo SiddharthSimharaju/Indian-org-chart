@@ -8,6 +8,30 @@ const firstIdx = (h, re) => h.findIndex((x) => re.test(x));
 const cellText = ($, el) => clean($, el).replace(/\[.*?\]/g, "").trim();
 const isCurrent = (t) => !t || /incumbent|present|current|^[-–—]$/i.test(t);
 
+const SUBHDR = /^(no\.?|name|party|constituency|district|remarks|alliance|member.*|assembly constituency)$/i;
+/**
+ * Column positions of an assembly table. Some pages (Rajasthan, Chhattisgarh) have a two-row header whose second row holds the real
+ * labels ("No.", "Name", "Party"); the first row's repeated labels are then combined with it. When several columns are labelled
+ * "Party" (Tripura), the one with the most filled cells is the party column.
+ */
+function assemblyColumns($, g) {
+  let h = hdrs($, g), start = 1;
+  const two = g.length > 2 && g[1].filter((c) => SUBHDR.test(cellText($, c))).length >= 3;
+  if (two) { const h2 = g[1].map((c) => cellText($, c).toLowerCase()); h = h.map((x, i) => `${x} ${h2[i]}`.trim()); start = 2; }
+  const rows = g.slice(start);
+  const filled = (i) => rows.filter((r) => cellText($, r[i])).length;
+  const dI = firstIdx(h, /^district/);
+  let nI = two ? lastIdx(h, /(member|mla|elected|winner).*\bname$/) : lastIdx(h, /^(name|member|mla|elected member|winner)/);
+  if (two && nI < 0) nI = lastIdx(h, /\bname$/);
+  const partyCols = h.map((x, i) => (/party/.test(x) ? i : -1)).filter((i) => i >= 0);
+  let pI = partyCols.length ? partyCols.reduce((best, i) => (filled(i) >= filled(best) ? i : best), partyCols[0]) : (nI > 0 && h[nI - 1] === h[nI] ? nI - 1 : -1);
+  if (pI >= 0 && filled(pI) === 0) pI = -1;
+  const cI = h.findIndex((x, i) => /constituency/.test(x) && !/\bno\.?$/.test(x) && rows[0] && !/^\d+$/.test(cellText($, rows[0][i])));
+  return { rows, dI, nI, pI, cI };
+}
+const PLACEHOLDER_NAME = /^(minister|ministers|name|names|portfolio|portfolios|vacant|none|member|mla|#|no\.?|party|chief minister|deputy chief minister)$/i;
+const CODE_NAME = /^[A-Z][A-Z()\-.&]{0,7}$/; // a party code (INC, BJP, SS(UBT)) is never a person's name
+
 /** Current ministers from a "X ministry" page. */
 export async function ministers(page) {
   const $ = await pageHtml(page);
@@ -21,8 +45,10 @@ export async function ministers(page) {
     for (const r of g.slice(1)) {
       if (r[nameI] === r[portI]) continue; // section header row
       if (left >= 0 && !isCurrent(cellText($, r[left]))) continue;
-      const L = links($, r[nameI])[0]; const name = cellText($, r[nameI]);
-      if (!name || /^(vacant|none)$/i.test(name)) continue;
+      const L = links($, r[nameI])[0]; let name = cellText($, r[nameI]);
+      if (L?.text && name.startsWith(L.text) && name.length > L.text.length) name = L.text; // the cell glues a title ("Neiphiu RioChief Minister") to the name
+      name = name.replace(/\s*(Deputy )?Chief Minister$/i, "").trim();
+      if (!name || PLACEHOLDER_NAME.test(name) || CODE_NAME.test(name)) continue;
       const portfolio = cellText($, r[portI]).replace(/\s*\n\s*/g, " · ");
       const key = L?.title || name;
       if (seen.has(key)) { const e = seen.get(key); if (portfolio && !e.role.includes(portfolio)) e.role += " · " + portfolio; continue; }
@@ -41,14 +67,12 @@ export async function mlasByDistrict(state, seats) {
     const res = [];
     $("table.wikitable").each((_, t) => {
       const g = grid($, t); if (g.length < 3) return;
-      const h = hdrs($, g);
-      const dI = firstIdx(h, /^district/), nI = lastIdx(h, /^(name|member|mla|elected member|winner)/);
+      const { rows, dI, nI, pI, cI } = assemblyColumns($, g);
       if (dI < 0 || nI < 0) return;
-      const cI = h.findIndex((x, i) => /constituency/.test(x) && !/^\d+$/.test(cellText($, g[1][i])));
-      const pI = lastIdx(h, /party/) >= 0 ? lastIdx(h, /party/) : (h[nI - 1] === h[nI] ? nI - 1 : -1);
-      for (const r of g.slice(1)) {
+      for (const r of rows) {
         const district = cellText($, r[dI]).replace(/\s*district$/i, "").trim(), name = cellText($, r[nI]);
-        if (!district || !name || r[dI] === r[nI] || /^(vacant|none)$/i.test(name)) continue;
+        if (!district || !name || r[dI] === r[nI] || /^(vacant|none)$/i.test(name) || CODE_NAME.test(name) || PLACEHOLDER_NAME.test(name)) continue;
+        if (name === district || (cI >= 0 && name === cellText($, r[cI]))) continue; // a merged district or constituency cell, not a person
         const L = links($, r[nI])[0];
         res.push({ district, title: L?.title, name, role: cI >= 0 ? cellText($, r[cI]) : "", party: pI >= 0 ? cellText($, r[pI]) : "" });
       }

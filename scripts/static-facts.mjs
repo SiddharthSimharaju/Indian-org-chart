@@ -101,3 +101,10 @@ export const PARTY_COLORS = {
   NCP: "#0EA5E9", NPP: "#F59E0B", NPF: "#7C3AED", ZPM: "#0D9488", SKM: "#D97706", AINRC: "#2563EB", BRS: "#DB2777",
   CPI: "#B91C1C", "NCP(SP)": "#0284C7", "CPI(ML)L": "#B91C1C", RLP: "#16A34A", BAP: "#0D9488", AIADMK: "#16A34A", YSRCP: "#2563EB", "SHS(UBT)": "#F97316", BJD: "#15803D", AIMIM: "#047857", SAD: "#1D4ED8", JJP: "#CA8A04", INLD: "#15803D", RLD: "#15803D", "JD(S)": "#16A34A", IND: "#6B7280", NDPP: "#DB2777", AGP: "#16A34A", TIPRA: "#7C3AED", IUML: "#16A34A", AIUDF: "#065F46", "LJP(RV)": "#0EA5E9", HAM: "#F59E0B", RLM: "#0EA5E9", "KC(M)": "#16A34A", "CPI(M)": "#B91C1C", "CPI (M)": "#B91C1C", SP: "#DC2626", BSP: "#2563EB", RJD: "#16A34A",
 };
+
+/** Deterministic colour for a party without a brand colour: a hue from the label, fixed saturation and lightness (same label, same colour on every build). */
+export const hueColor = (label) => {
+  let h = 0; for (const ch of String(label)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  const s = 0.55, l = 0.45, a = s * Math.min(l, 1 - l), f = (n) => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, "0"); };
+  return `#${f(0)}${f(8)}${f(4)}`;
+};
