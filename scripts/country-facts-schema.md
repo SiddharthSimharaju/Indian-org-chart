@@ -57,7 +57,8 @@ Every build fails (no file written without `--force`) if any of these break:
 6. **No scraper leftovers:** no "N years ago", "(date as given in the party's…" or `[1]`-style footnote text in any field.
 7. **Neutral tone:** scraped bios, blurbs and notes must not contain loaded labels ("far-right", "far-left", "revisionist", "extremist", "populist" and similar); set a short hand-written `bio` on the person instead.
 8. **No guessing:** a list member matched only "by elimination" (the one left over on each side) fails the build; match by name, id or an official record.
-9. The structural checks: unique ids, a name and a `card` on every office, no placeholder or glued names, text on every node.
+9. **No scraped bios:** Wikipedia lead paragraphs are never used as a `bio`; only the one-line `blurb` and the `wiki` link are kept. A `bio` exists only when the spec writes it by hand (the builder marks it `bioHand`), and every sentence in it must be sourced. IPA strings, newlines and trailing whitespace are stripped from scraped text and checked.
+10. The structural checks: unique ids, a name and a `card` on every office, no placeholder or glued names, text on every node.
 
 ## Spec fields (declarative text, written by hand)
 

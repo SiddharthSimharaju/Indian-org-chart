@@ -35,17 +35,20 @@ async function build(id) {
   const thumbOf = FAST ? {} : await thumbs([...memTitles, ...headTitles], 120);
   const descOf = FAST ? {} : await descriptions(memTitles);
 
+  // Strip IPA pronunciation strings, newlines and trailing whitespace from any scraped text.
+  const IPA_CH = "ˈˌːəɪʊɛɔæɑʃʒθðŋɜɒʌ";
+  const clean = (t) => String(t ?? "").replace(new RegExp(`\\s*[(\\[/][^)\\]/]*[${IPA_CH}][^)\\]/]*[)\\]/]`, "g"), "").replace(/\s+/g, " ").trim();
   const person = (o, extra = {}) => {
     const s = (o?.title && sums[o.title]) || {};
     return {
       name: o?.name || s.title?.replace(/\s*\(.*\)$/, "") || "",
-      image: o?.image || s.image || thumbOf[o?.title] || null, blurb: s.description || o?.blurb || "", bio: o?.bio ?? s.extract ?? "", wiki: s.url || o?.wiki || (o?.title ? wikiUrl(o.title) : null),
+      image: o?.image || s.image || thumbOf[o?.title] || null, blurb: clean(s.description || o?.blurb || ""), ...(o?.bio ? { bio: clean(o.bio), bioHand: true } : { bio: "" }), wiki: s.url || o?.wiki || (o?.title ? wikiUrl(o.title) : null),
       ...(o?.ref ? { ref: o.ref } : {}),
       party: o?.party || "", since: o?.since || "", ...(o?.constituency ? { constituency: o.constituency } : {}), ...(o?.note ? { note: o.note } : {}), ...extra,
     };
   };
   const member = (m, extra = {}) => ({
-    name: m.name, image: m.image || thumbOf[m.title] || null, blurb: m.blurb || descOf[m.title] || "", bio: "", wiki: m.wiki || (m.title ? wikiUrl(m.title) : null),
+    name: m.name, image: m.image || thumbOf[m.title] || null, blurb: clean(m.blurb || descOf[m.title] || ""), bio: "", wiki: m.wiki || (m.title ? wikiUrl(m.title) : null),
     party: m.party || "", since: m.since || "", ...(m.seat ? { constituency: m.seat } : {}), ...(m.ref ? { ref: m.ref } : {}), ...(m.note ? { note: m.note } : {}), ...extra,
   });
 
@@ -207,14 +210,14 @@ async function build(id) {
   //   5. no string ends in a comma/semicolon/colon, and no glued words (a run of 3+ lowercase letters, then a capital, then 2+ lowercase: "SolidaritésMinistre")
   //   6. no relative dates ("9 years ago") and no scraper leftovers ("(date as given in ...)")
   { const GLUED = /[a-zà-ÿ]{3,}[A-ZÀ-Þ][a-zà-ÿ]{2,}/, TRAIL = /[,;:]\s*$/, REL = /\b\d+\s+(years?|months?|weeks?|days?)\s+ago\b|\(date as given|as given in the party|\[\s*\d+\s*\]/i;
-    const bad = (where, v) => { if (typeof v !== "string") return; const hit = TRAIL.test(v) ? "ends in punctuation" : GLUED.test(v) ? "glued words" : REL.test(v) ? "relative date or scraper leftover" : ""; if (hit) errors.push(`${where}: ${hit}: "${v.slice(0, 90)}"`); };
+    const bad = (where, v) => { if (typeof v !== "string") return; const hit = /\n|[ˈˌːəɪʊɛɔæɑʃʒθðŋɜɒʌ]/.test(v) ? "newline or IPA string" : TRAIL.test(v) ? "ends in punctuation" : GLUED.test(v) ? "glued words" : REL.test(v) ? "relative date or scraper leftover" : ""; if (hit) errors.push(`${where}: ${hit}: "${v.slice(0, 90)}"`); };
     const pairs = (where, arr) => (arr || []).forEach((x) => (Array.isArray(x) ? x : [x?.label, x?.value]).forEach((v) => bad(where, v)));
     for (const n of all) {
       for (const k of ["label", "place", "sub", "badge", "summary", "plain", "electedBy", "reportsTo"]) bad(`${n.id}.${k}`, n[k]);
       pairs(`${n.id}.plainFacts`, n.plainFacts); pairs(`${n.id}.terms`, n.terms); pairs(`${n.id}.stats`, n.stats); pairs(`${n.id}.memberPlain.facts`, n.memberPlain?.facts); pairs(`${n.id}.memberPlain.terms`, n.memberPlain?.terms);
       bad(`${n.id}.memberPlain.plain`, n.memberPlain?.plain); for (const v of Object.values(n.card || {})) (Array.isArray(v) ? v : [v]).forEach((x) => bad(`${n.id}.card`, x));
-      if (n.person) { bad(`${n.id}.person.party`, n.person.party); bad(`${n.id}.person.note`, n.person.note); bad(`${n.id}.person.since`, n.person.since); }
-      for (const m of n.members || []) { bad(`${n.id} member ${m.name} party`, m.party); bad(`${n.id} member ${m.name} role`, m.role); bad(`${n.id} member ${m.name} note`, m.note); }
+      if (n.person) { bad(`${n.id}.person.blurb`, n.person.blurb); bad(`${n.id}.person.bio`, n.person.bio); bad(`${n.id}.person.party`, n.person.party); bad(`${n.id}.person.note`, n.person.note); bad(`${n.id}.person.since`, n.person.since); }
+      for (const m of n.members || []) { bad(`${n.id} member ${m.name} party`, m.party); bad(`${n.id} member ${m.name} role`, m.role); bad(`${n.id} member ${m.name} blurb`, m.blurb); bad(`${n.id} member ${m.name} note`, m.note); }
     }
     for (const [party, info] of Object.entries(partyInfo)) { bad(`partyInfo ${party}`, info[0]); bad(`partyInfo ${party}`, info[1]); }
     for (const party of Object.keys(partyColors)) bad(`partyColors key`, party);
@@ -227,6 +230,9 @@ async function build(id) {
     }
     for (const [party, info] of Object.entries(partyInfo)) if (LOADED.test(info[1] || "")) errors.push(`partyInfo ${party}: loaded wording "${(info[1].match(LOADED) || [])[0]}"`);
   }
+  for (const e of data.selfCheckErrors || []) errors.push(e); // checks supplied by the country spec (e.g. Japan: romanised family name vs the official kana reading)
+  // Generic check 9: Wikipedia lead paragraphs are never used as a bio. A bio exists only where the country spec wrote it by hand (marked bioHand), and each such sentence must be sourced.
+  for (const n of all) if (n.person?.bio && !n.person.bioHand) errors.push(`${n.id}.person.bio: bio is not marked hand-written`);
   // Generic check 8: no list member may be matched "by elimination" (the one left over on each side); a person is matched by name, id or an official record, never by guessing.
   for (const m of members) if (m.matchedBy === "elimination") errors.push(`${m.name}: matched only by elimination`);
   // Generic check 4: the head of state or government must not also appear as a minister card.

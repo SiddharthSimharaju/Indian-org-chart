@@ -170,6 +170,7 @@ export default {
     const person = async (page, party = true) => { const i = await incumbent(page); return { title: i.title, name: nm(i.title, i.name), since: i.since, ...(party ? { party: await partyOfPage(i.title, norm) } : {}) }; };
     const headOfState = await person("President of Germany", false);
     const headOfGov = await person("Chancellor of Germany");
+    if (headOfState.name === "Frank-Walter Steinmeier") headOfState.bio = "Frank-Walter Steinmeier was born on 5 January 1956. He has been Federal President since 2017: he was elected on 12 February 2017 and re-elected on 13 February 2022 by the Federal Convention (1,045 of 1,437 votes; bundestag.de). He was Foreign Minister from 2005 to 2009 and from 2013 to 2017, and Vice-Chancellor from 2007 to 2009.";
     if (headOfGov.name === "Friedrich Merz") headOfGov.bio = "Friedrich Merz is the Chancellor of Germany and chairman of the Christian Democratic Union (CDU)."; // hand-written neutral bio (builder check 7)
     console.log("president", headOfState.name, "| chancellor", headOfGov.name, headOfGov.party);
 
@@ -226,7 +227,7 @@ export default {
     }
     for (const c of nameChanges) { const m = byKey.get(fl(c.from)); if (!m) continue; byKey.delete(fl(c.from)); byKey.set(fl(c.to), { ...m, name: c.to, note: `Name changed from ${c.from} on ${iso(c.date)} (bundestag.de)` }); }
     const members = [...byKey.values()].map((m) => ({ ...m, title: wikiTitle.get(fl(m.name)) }));
-    const NOTE_MDB = { [fl("Jan Wenzel Schmidt")]: "Party member; excluded from the AfD parliamentary group on 3 March 2026, sits fraktionslos (bundestag.de)", [fl("Gerhard Trabert")]: "Seat held but not exercised for health reasons (evangelisch.de, 19 August 2025)" };
+    const NOTE_MDB = { [fl("Jan Wenzel Schmidt")]: "Party member; excluded from the AfD parliamentary group on 3 March 2026, sits fraktionslos; his challenge to the exclusion (2 BvE 2/26) was heard at the Federal Constitutional Court on 4 November 2026 and no judgment has been found (bundestag.de)", [fl("Gerhard Trabert")]: "Seat held but not exercised for health reasons; he announced in August 2025 that he would give up the seat, and no successor has entered as of 22 November 2026 (evangelisch.de, 19 August 2025; bundestag.de)", [fl("Sieghard Knodel")]: "Non-party; sits as fraktionslos (no parliamentary group) since leaving the AfD and its group on 5 May 2025 (bundestag.de)" };
     for (const m of members) if (NOTE_MDB[fl(m.name)]) m.note = NOTE_MDB[fl(m.name)];
     const tally = members.reduce((a, m) => { const k = /^Independent/.test(m.party) ? "independents" : m.party; a[k] = (a[k] || 0) + 1; return a; }, {});
     console.log("bundestag party tally:", JSON.stringify(tally));
@@ -316,7 +317,7 @@ export default {
     const wikiHead = new Map(lt.g.slice(1).map((r) => [nameOnly(T(mp, r[0])), { key: nameKey(nm(links(mp, r[2]).find((l) => !/^(List of|Governing Mayor|First Mayor|Mayor|Minister|President of the Senate)/i.test(l.title))?.title, "")), since: dateOf(T(mp, r[5])), title: links(mp, r[2]).find((l) => !/^(List of|Governing Mayor|First Mayor|Mayor|Minister|President of the Senate)/i.test(l.title))?.title }]));
     const LABEL = { Berlin: "Governing Mayor", Hamburg: "First Mayor and President of the Senate", Bremen: "President of the Senate and Mayor" };
     const NOTE = {
-      Berlin: "Caretaker government after the 20 September 2026 election; Linke, Greens and SPD began coalition talks on 2 November 2026 (reported)",
+      Berlin: "Wegner's Senate remains in office while coalition talks continue; talks began on 2 November 2026 (reported)",
       "Saxony-Anhalt": "Remains in office after the 6 September 2026 election; formation of a new government not confirmed",
       "Mecklenburg-Vorpommern": "Re-elected 16 November 2026 (39 of 71 votes; SPD, Linke and Greens) (infranken)",
     };

@@ -170,6 +170,9 @@ export default {
     const { incumbent, partyOfPage, infoboxRow, allTables, T, links, nameOnly, dateOf, grid } = w;
     const { getText, nameKey } = await import("../official-sources.mjs");
     const nm = (title, text) => nameOnly(title || text || "");
+    let selfCheckErrors = [];
+    // Stage names and hand-verified spellings that legitimately differ from the official reading (checked by hand against the official list).
+    const FAM_OK = new Set(["Saya", "LaSalle Ishii", "Jesús Fukasaku", "Alex Saito", "Chikage Koga", "Toshitaka Ōoka"]);
     // Party cell: the page the abbreviation links to gives the full party name.
     const pf = ($, cell) => { const L = links($, cell)[0]; return L ? norm(nameOnly(L.title)) : norm(T($, cell)); };
     const person = async (page) => { const i = await incumbent(page); return { title: i.title, name: nm(i.title, i.name), since: i.since }; };
@@ -253,6 +256,11 @@ export default {
     console.log("representatives not on the Shugiin list (removed):", unmatched.map((m) => `${m.name} (${m.party}, ${m.seat})`).join("; ") || "none", "| Shugiin members not matched:", shRows.filter((x) => !used.has(x)).map((x) => x.kanji).join(", ") || "none");
     const removedReps = unmatched.map((m) => m.name);
     reps.splice(0, reps.length, ...reps.filter((m) => m.sh));
+    // Spelling corrected from the Shugiin reading: 須田英太郎 (すだ えいたろう) is Eitarō Suda; Wikipedia's "Sudō" is a different spelling.
+    for (const m of reps) if (m.name === "Eitarō Sudō") { m.name = "Eitarō Suda"; m.title = undefined; m.wiki = null; m.image = null; m.ref = m.ref && m.ref.replace(/sudo/i, "suda"); }
+    selfCheckErrors = [];
+    const famCheck = (members, rec, label) => { for (const m of members) { const r = m[rec]; if (!r) continue; const fam = jaNameParts(m.name).fam; if (r.fam && fam && r.fam !== fam && !FAM_OK.has(m.name)) selfCheckErrors.push(`${label}: ${m.name}: romanised family name "${fam}" differs from the official reading ${r.kanji} ("${r.fam}")`); } };
+    famCheck(reps, "sh", "Shugiin");
 
     // The Centrist Reform Alliance broke up in September 2026 (jiji.com, 24 September 2026). Former members are labelled from the Democratic Reform Party's member list and the official caucus column.
     const DRP = "Democratic Reform Party (民主改革の会)";
@@ -293,7 +301,7 @@ export default {
     const lowerNote = `House of Representatives: ${shRows.length} sitting and ${lowerVacant} vacant on the Shugiin's member list of 28 September 2026${removedReps.length ? `; ${removedReps.join(", ")} died on 17 September 2026 (Hokkaido Shimbun) and is no longer listed` : ""}`;
     const lower = { members: reps, official: { count: shRows.length, source: "https://www.shugiin.go.jp/internet/itdb_annai.nsf/html/statics/syu/1giin.htm (and 2giin to 10giin), as of 28 September 2026" }, leader: spk, others: [] };
     { const dm = reps.find((m) => K(m.name) === K("Keiichi Ishii"));
-      if (dm) lower.others.push({ title: "Keiichi Ishii", name: dm.name, role: "Deputy Speaker", since: "2026-02-18", party: dm.party, ref: dm.ref, note: "Deputy Speaker; Komeito-origin member (kumanichi.com, 11 September 2026); listed without a caucus" }); }
+      if (dm) lower.others.push({ title: "Keiichi Ishii", name: dm.name, role: "Vice-Speaker", since: "18 February 2026", party: dm.party, ref: dm.ref, note: "Vice-Speaker (Deputy Speaker); Komeito-origin member (kumanichi.com, 11 September 2026); listed without a caucus" }); }
 
     // House of Councillors
     const { $: cs, tables: cst } = await allTables("List of current senators of Japan", 3);
@@ -339,6 +347,9 @@ export default {
     console.log("  unmatched Sangiin records:", JSON.stringify(sgMembers.filter((x) => !sgUsed.has(x)).map((x) => [x.kanji, x.caucus, x.seat])));
     console.log("councillors not on the current Sangiin list after partial matching (removed):", cUnmatched.map((m) => `${m.name} (${m.party}, ${m.seat})`).join("; ") || "none", "| Sangiin members not matched:", sgMembers.filter((x) => !sgUsed.has(x)).map((x) => x.kanji).join(", ") || "none");
     const removedCouncillors = cUnmatched.map((m) => m.name);
+    // Spellings corrected from the Sangiin reading (same people; Wikipedia uses Kunrei-style or reversed spellings).
+    for (const m of councillors) { const fix = { "Hiroki Hazikano": "Hiroki Hajikano", "Hideki Azumano": "Hideki Higashino", "Shibata Takumi": "Takumi Shibata" }[m.name]; if (fix) { m.name = fix; if (m.ref) m.ref = m.ref.replace(/hazikano|azumano|shibata-takumi/i, (x) => ({ hazikano: "hajikano", azumano: "higashino", "shibata-takumi": "takumi-shibata" })[x.toLowerCase()]); } }
+    famCheck(councillors, "sg", "Sangiin");
     councillors.splice(0, councillors.length, ...councillors.filter((m) => m.sg));
     // Independents who sit in a caucus are labelled with it; a member in no caucus is an independent (this fixes the President, whom Wikipedia lists under his former party)
     const cRelabel = { caucus: [], none: [] };
@@ -350,7 +361,8 @@ export default {
     console.log("councillors relabelled: now independent, no caucus:", cRelabel.none.join("; ") || "none", "| independents in a caucus:", cRelabel.caucus.join(", ") || "none");
     const presMember = councillors.find((m) => jaNameKey(m.name) === jaNameKey(nm(pl?.title, T(cs, prow[1]))));
     const upper = { members: councillors, official: { count: sgMembers.length, source: `${SANGIIN} (${sgAsOf})` }, leader: { title: pl?.title, name: nm(pl?.title, T(cs, prow[1])), party: presMember?.party || pf(cs, prow[2]), since: "", ref: presMember?.ref }, others: [] };
-    const upperNote = `House of Councillors: ${sgMembers.length} sitting (${248 - sgMembers.length} vacant) on the Sangiin's own list${sgAsOf ? " (" + sgAsOf + ")" : ""}${removedCouncillors.length ? (removedCouncillors.join() === "Masaaki Yamazaki" ? "; Masaaki Yamazaki (Fukui, LDP) died on 13 November 2026 (NHK) and is no longer listed" : `; ${removedCouncillors.join(", ")} is no longer listed`) : ""}`;
+    const vacantUpper = 248 - sgMembers.length;
+    const upperNote = `House of Councillors: ${sgMembers.length} sitting (${vacantUpper} vacant) on the Sangiin's own list${sgAsOf ? " (" + sgAsOf + ")" : ""}${removedCouncillors.join() === "Masaaki Yamazaki" ? `; of the ${vacantUpper} vacant seats, one is Masaaki Yamazaki's (Fukui, LDP, died 13 November 2026, NHK) and the cause of the other is not identified` : removedCouncillors.length ? `; ${removedCouncillors.join(", ")} is no longer listed` : ""}`;
     { const vm = councillors.find((m) => jaNameKey(m.name) === jaNameKey("Tetsuro Fukuyama"));
       if (vm) upper.others.push({ title: "Tetsuro Fukuyama", name: vm.name, role: "Vice-President of the House of Councillors", since: "", party: vm.party, ref: vm.ref }); }
     console.log("president of councillors", upper.leader.name);
@@ -367,8 +379,26 @@ export default {
     // Governors
     const { $: gv, tables: gt } = await allTables("List of current Japanese governors", 20);
     const gtbl = gt.find((t) => t.h[0] === "prefecture");
-    const regions = gtbl.g.slice(1).map((r) => { const L = links(gv, r[2])[0], name = nameOnly(T(gv, r[0])).replace(/\s*list$/i, "").trim(); if (!L) return null; return { name, head: { title: L.title, name: nm(L.title, L.text), party: "", since: dateOf(T(gv, r[6])) } }; }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+    const nga = JSON.parse((await import("node:fs")).readFileSync("scripts/data/jp-nga-governors.json", "utf8")).items;
+    const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const ngaDate = (d) => { const [y, mo, da] = d.split("/").map(Number); return `${da} ${MONTHS[mo - 1]} ${y}`; };
+    const prefKey = (name) => Object.keys(PREF_JP).find((k) => jaNorm(PREF_JP[k]) === jaNorm(name));
+    const ngaMiss = [];
+    const regions = gtbl.g.slice(1).map((r) => { const L = links(gv, r[2])[0], name = nameOnly(T(gv, r[0])).replace(/\s*list$/i, "").trim(); if (!L) return null;
+      const head = { title: L.title, name: nm(L.title, L.text), party: "", since: "" };
+      const k = prefKey(name), mine = nga.filter((x) => k && x.inaugurations.some((i) => i.prefecture_name.startsWith(k) && !i.inauguration_to));
+      const rec = mine.find((x) => jaReadingKey(x.kana) === jaNameKey(head.name));
+      if (rec) {
+        const terms = rec.inaugurations.filter((i) => i.prefecture_name.startsWith(k)).sort((a, b) => a.inauguration_from.localeCompare(b.inauguration_from));
+        const cur = terms.find((i) => !i.inauguration_to), first = terms[0];
+        head.since = ngaDate(cur.inauguration_from);
+        if (first.inauguration_from !== cur.inauguration_from) head.note = `First took office on ${ngaDate(first.inauguration_from)}; current term began ${ngaDate(cur.inauguration_from)} (National Governors' Association)`;
+      } else ngaMiss.push(name);
+      return { name, head }; }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+    const staleFukui = nga.filter((x) => x.inaugurations.some((i) => i.prefecture_name.startsWith("福井") && !i.inauguration_to)).length > 1;
+    if (ngaMiss.length) console.log("governors not matched in the NGA file (since left blank):", ngaMiss.join(", "));
+    const ngaNote = staleFukui ? "The National Governors' Association file still lists Fukui's previous governor (Sugimoto) as in office, so it is stale for Fukui; Takato Ishida is kept as governor" : "";
     console.log("governors", regions.length);
-    return { headOfState, headOfGov, ministers, chambers: { reps: lower, councillors: upper }, judges, regions, note: [lowerNote, drpNote, upperNote].filter(Boolean).join(". ") };
+    return { headOfState, headOfGov, ministers, chambers: { reps: lower, councillors: upper }, judges, regions, note: [lowerNote, drpNote, upperNote, ngaNote].filter(Boolean).join(". "), selfCheckErrors };
   },
 };
