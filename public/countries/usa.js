@@ -128,7 +128,7 @@ const FEDERAL = ["house-reps", "senate", "congress"];
 
 export default {
   id: "usa", name: "United States", flag: "🇺🇸", dataUrl: "data/usa.json", locale: "en-US",
-  rootId: "usa", pageTitle: "United States", loading: "Loading the republic…",
+  continent: "Americas", rootId: "usa", pageTitle: "United States", loading: "Loading the republic…",
   description: "An interactive org chart of US politics: the President, Cabinet, Congress, Supreme Court and the governors and legislatures of all 50 states.",
   searchPlaceholder: "Search a person, state or office",
   labels: { org: "Organization details" },

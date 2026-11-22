@@ -9,7 +9,7 @@ const WIKI = { "lok-sabha": "Lok_Sabha", "rajya-sabha": "Rajya_Sabha", cabinet: 
 
 export default {
   id: "india", name: "India", flag: "🇮🇳", dataUrl: "data/india.json", locale: "en-IN",
-  rootId: "president", pageTitle: "India", loading: "Loading the republic…",
+  continent: "Asia", rootId: "president", pageTitle: "India", loading: "Loading the republic…",
   description: "An interactive org chart of Indian politics: the President, Prime Minister, Parliament, Governors and Chief Ministers of every state.",
   searchPlaceholder: "Search a person, state or office",
   labels: { org: "Organisation details" },

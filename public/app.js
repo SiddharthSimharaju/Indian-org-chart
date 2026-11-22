@@ -1,5 +1,6 @@
 // Political Org Charts: interactive org tree for any country in countries/. Data comes from /data/<country>.json (built from Wikipedia).
 import { COUNTRIES, DEFAULT_COUNTRY, ALIASES } from "./countries/index.js";
+import { makeGeneric } from "./countries/generic.js";
 import { track, visitorCount } from "./analytics.js";
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -85,7 +86,7 @@ document.addEventListener("error", (e) => {
 const cardSub = (n) => C.cardSub(n);
 // Every person card shows the same three facts, so cards line up and can be compared at a glance.
 function personCard(n) {
-  const m = C.person[n.role] || {}, p = n.person;
+  const m = n.card || C.person[n.role] || {}, p = n.person;
   const party = p.party ? `<span class="n-party" style="--pc:${partyColor(p.party)}"><i></i>${esc(p.party)}</span>` : `<span class="n-party none">${C.nonpartisan.includes(n.role) ? "Non-partisan" : "No party listed"}</span>`;
   const where = m.where ? [m.where[0], m.where[1] || n.place] : ["Jurisdiction", n.place];
   const rows = [where, ["Chosen by", m.chosen || "—"], ["Term", m.term || "—"]];
@@ -298,7 +299,8 @@ function initPanZoom() {
   $("#zIn").onclick = () => { smooth(true); zoomAt(1.25); };
   $("#zOut").onclick = () => { smooth(true); zoomAt(0.8); };
   $("#fit").onclick = () => fit();
-  $("#expandAll").onclick = () => { nodes.forEach((n) => n.children.length && !C.expandAllSkip.test(n.id) && expanded.add(n.id)); render(); fit(); };
+  const skipExpand = (n) => (typeof C.expandAllSkip === "function" ? C.expandAllSkip(n) : C.expandAllSkip.test(n.id));
+  $("#expandAll").onclick = () => { nodes.forEach((n) => n.children.length && !skipExpand(n) && expanded.add(n.id)); render(); fit(); };
   $("#collapseAll").onclick = () => { expanded.clear(); expanded.add(C.rootId); render(); fit(); };
 }
 
@@ -582,10 +584,16 @@ function setView(v) {
 const dataCache = new Map();
 let loadSeq = 0;
 const safe = (fn) => { try { return fn(); } catch { return null; } };
+const REG = { ...COUNTRIES }; // id -> config (custom configs, plus generic stubs from data/countries.json)
+const CONTINENT = { india: "Asia", usa: "Americas" };
+async function loadManifest() {
+  const list = (await safe(async () => (await fetch("data/countries.json")).json())) || [];
+  for (const e of Array.isArray(list) ? list : []) if (e?.id && !REG[e.id]) REG[e.id] = makeGeneric(e);
+}
 const pickCountry = () => {
   const q = new URLSearchParams(location.search).get("c")?.toLowerCase();
   const id = ALIASES[q] || q || safe(() => localStorage.getItem("poc-country"));
-  return COUNTRIES[id] ? id : DEFAULT_COUNTRY;
+  return REG[id] ? id : DEFAULT_COUNTRY;
 };
 function resetState() {
   nodes.clear(); els.clear(); pos.clear(); grids.clear(); more.clear(); expanded.clear();
@@ -597,14 +605,14 @@ function resetState() {
 async function loadCountry(id, hash = "") {
   const seq = ++loadSeq;
   resetState();
-  C = COUNTRIES[id];
+  C = REG[id];
   document.documentElement.dataset.country = C.id;
   document.title = `Political Org Charts · ${C.pageTitle}`;
   $('meta[name="description"]')?.setAttribute("content", C.description);
   $("#q").placeholder = C.searchPlaceholder;
   $("#subtitle").textContent = "Loading…";
   $("#countryFlag").textContent = C.flag; $("#countryName").textContent = C.name;
-  $("#countryMenu").querySelectorAll("[data-country]").forEach((b) => b.setAttribute("aria-selected", b.dataset.country === C.id));
+  markCountry();
   $("#loading")?.remove();
   $("#stage").insertAdjacentHTML("beforeend", `<div class="loading" id="loading">${esc(C.loading)}</div>`);
   let data = dataCache.get(C.id);
@@ -617,25 +625,44 @@ async function loadCountry(id, hash = "") {
   if (seq !== loadSeq) return; // a newer switch superseded this one
   $("#loading").remove();
   DATA = data; PARTY = DATA.partyColors || {};
+  C.attach?.(data);
+  document.title = `Political Org Charts · ${C.pageTitle}`;
+  $('meta[name="description"]')?.setAttribute("content", C.description);
   index(DATA.root); buildSearch(); expanded.add(C.rootId);
   $("#subtitle").textContent = C.subtitle(nodes);
   if (view === "list") renderList(); else { render(); fit(false); }
   if (hash && nodes.has(hash)) select(hash, null, { center: true });
 }
 async function switchCountry(id) {
-  if (!COUNTRIES[id] || id === C?.id) return;
+  if (!REG[id] || id === C?.id) return;
   const u = new URL(location.href); u.searchParams.set("c", id); u.hash = "";
   history.replaceState(null, "", u.pathname + u.search);
   safe(() => localStorage.setItem("poc-country", id));
-  track("country" + id);
+  track("country" + id.replace(/[^a-z0-9]/g, ""));
   await loadCountry(id);
 }
+const markCountry = () => $("#countryMenu").querySelectorAll("[data-country]").forEach((b) => b.setAttribute("aria-selected", b.dataset.country === C?.id));
 function initCountryMenu() {
   const btn = $("#countryBtn"), menu = $("#countryMenu");
-  menu.innerHTML = Object.values(COUNTRIES).map((c) => `<button role="option" class="country-opt" data-country="${c.id}" aria-selected="false"><span class="flag">${c.flag}</span>${esc(c.name)}</button>`).join("");
+  const entries = Object.values(REG).map((c) => ({ id: c.id, name: c.name, flag: c.flag, continent: c.continent || CONTINENT[c.id] || "Other", coverage: c.coverage }));
+  const order = ["Africa", "Americas", "Asia", "Europe", "Oceania", "Other"];
+  const featured = ["india", "usa"];
+  const opt = (c) => `<button role="option" class="country-opt" data-country="${c.id}" data-name="${esc(c.name.toLowerCase())}" aria-selected="false"><span class="flag">${c.flag || ""}</span><span class="nm">${esc(c.name)}</span>${c.coverage && c.coverage !== "complete" ? `<span class="cov" title="Legislature member list is ${esc(c.coverage)}">${esc(c.coverage)}</span>` : ""}</button>`;
+  const build = () => `<div class="country-find"><input id="countryQ" type="search" placeholder="Find a country (${entries.length})" aria-label="Find a country" autocomplete="off"></div><div class="country-list" id="countryList">` +
+    (entries.length > 8 ? `<div class="country-h" data-h="Featured">Featured</div>${entries.filter((c) => featured.includes(c.id)).map(opt).join("")}` : "") +
+    order.map((ct) => { const es = entries.filter((c) => c.continent === ct && (entries.length <= 8 || !featured.includes(c.id))).sort((a, b) => a.name.localeCompare(b.name)); return es.length ? `<div class="country-h" data-h="${ct}">${ct}</div>${es.map(opt).join("")}` : ""; }).join("") + `<div class="country-none" hidden>No matching country</div></div>`;
+  menu.innerHTML = build();
   const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
-  btn.addEventListener("click", () => { menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); });
+  const filter = (q) => {
+    q = q.trim().toLowerCase(); let shown = 0;
+    menu.querySelectorAll(".country-opt").forEach((o) => { const on = !q || o.dataset.name.includes(q); o.hidden = !on; if (on) shown++; });
+    menu.querySelectorAll(".country-h").forEach((h) => { let x = h.nextElementSibling, any = false; while (x && !x.classList.contains("country-h") && !x.classList.contains("country-none")) { if (!x.hidden) any = true; x = x.nextElementSibling; } h.hidden = !any; });
+    menu.querySelector(".country-none").hidden = shown > 0;
+  };
+  btn.addEventListener("click", () => { menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); if (!menu.hidden) { const q = $("#countryQ"); q.value = ""; filter(""); q.focus(); menu.querySelector("[aria-selected=true]")?.scrollIntoView({ block: "nearest" }); } });
   menu.addEventListener("click", (e) => { const o = e.target.closest("[data-country]"); if (!o) return; close(); switchCountry(o.dataset.country); });
+  menu.addEventListener("input", (e) => { if (e.target.id === "countryQ") filter(e.target.value); });
+  menu.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "countryQ") { const f = [...menu.querySelectorAll(".country-opt")].find((o) => !o.hidden); if (f) { close(); switchCountry(f.dataset.country); } } });
   document.addEventListener("click", (e) => { if (!e.target.closest("#country")) close(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { close(); btn.focus(); } });
 }
@@ -644,6 +671,7 @@ function initCountryMenu() {
 async function boot() {
   document.querySelectorAll("[data-icon]").forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
   $("#brandMark").innerHTML = MARK;
+  await loadManifest();
   initCountryMenu(); initPanZoom(); initMinimap(); initSearch();
   track("pageloads");
   visitorCount().then((n) => { if (n == null) return; const v = $("#visitors"); v.textContent = `${n.toLocaleString()} ${n === 1 ? "visitor" : "visitors"}`; v.hidden = false; });

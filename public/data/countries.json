@@ -1,0 +1,42 @@
+[
+  {
+    "id": "canada",
+    "name": "Canada",
+    "flag": "🇨🇦",
+    "continent": "Americas",
+    "dataUrl": "data/canada.json",
+    "coverage": "complete"
+  },
+  {
+    "id": "france",
+    "name": "France",
+    "flag": "🇫🇷",
+    "continent": "Europe",
+    "dataUrl": "data/france.json",
+    "coverage": "complete"
+  },
+  {
+    "id": "germany",
+    "name": "Germany",
+    "flag": "🇩🇪",
+    "continent": "Europe",
+    "dataUrl": "data/germany.json",
+    "coverage": "complete"
+  },
+  {
+    "id": "japan",
+    "name": "Japan",
+    "flag": "🇯🇵",
+    "continent": "Asia",
+    "dataUrl": "data/japan.json",
+    "coverage": "complete"
+  },
+  {
+    "id": "uk",
+    "name": "United Kingdom",
+    "flag": "🇬🇧",
+    "continent": "Europe",
+    "dataUrl": "data/uk.json",
+    "coverage": "complete"
+  }
+]

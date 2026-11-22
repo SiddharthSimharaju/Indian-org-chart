@@ -9,7 +9,8 @@
     "build:india": "node scripts/build-india.mjs",
     "build:usa": "node scripts/build-usa.mjs",
     "start": "node scripts/serve.mjs",
-    "stats": "node scripts/stats.mjs"
+    "stats": "node scripts/stats.mjs",
+    "verify": "node scripts/verify-data.mjs"
   },
   "devDependencies": {
     "cheerio": "^1.0.0"

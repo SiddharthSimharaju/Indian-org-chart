@@ -370,3 +370,14 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
 .country-opt:hover { background: var(--blue-tint); }
 .country-opt[aria-selected="true"] { background: var(--blue-tint); color: var(--blue-ink); font-weight: 700; }
 @media (max-width: 900px) { .country { order: 2; } .country-btn #countryName { display: none; } }
+
+/* country menu: searchable list grouped by continent */
+.country-menu { width: 280px; padding: 0; overflow: hidden; }
+.country-find { padding: 8px; border-bottom: 1px solid var(--line); }
+.country-find input { width: 100%; height: 34px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 8px; font: inherit; font-size: 13.5px; }
+.country-find input:focus-visible { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-tint); }
+.country-list { max-height: min(420px, 60vh); overflow: auto; padding: 6px; }
+.country-h { padding: 10px 12px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.country-opt .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.country-opt .cov { flex: none; padding: 1px 7px; border-radius: 999px; background: #fdf3d6; color: #6b4e00; font-size: 10.5px; font-weight: 600; text-transform: capitalize; }
+.country-none { padding: 14px 12px; color: var(--ink-2); font-size: 13px; }
