@@ -261,7 +261,7 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
 
 /* ---------- Mintlify dashboard skin (visual only) ----------
    Inter, neutral greys, hairline borders, light-grey section cards, green for success states,
-   peach for callouts and warnings, black primary buttons, a thin icon rail on the left. */
+   peach for callouts and warnings, black primary buttons, and a single top navigation bar. */
 :root {
   --bg: #ffffff;
   --ink: #111111;
@@ -298,32 +298,28 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
 .banner-x:hover { background: rgba(0, 0, 0, .05); }
 .banner-x .icon { width: 14px; height: 14px; }
 
-/* layout: icon rail + column */
+/* layout */
 .body { flex: 1; min-height: 0; display: flex; }
 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.rail { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 12px; background: var(--fill); border-right: 1px solid var(--line); }
-.brand-mark { width: 32px; height: 32px; border-radius: 50%; background: #fff; border: 1px solid var(--line); display: grid; place-items: center; margin-bottom: 12px; }
-.brand-mark svg { width: 19px; height: 19px; }
-.rail .seg { flex-direction: column; padding: 0; gap: 4px; background: none; border: 0; border-radius: 0; }
-.rail .seg button, .rail-btn { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--ink-2); transition: background .15s, color .15s; }
-.rail .seg button .icon, .rail-btn .icon { width: 18px; height: 18px; }
-.rail .seg button:hover, .rail-btn:hover { background: var(--fill-2); color: var(--ink); }
-.rail .seg button[aria-selected="true"] { background: transparent; color: var(--green); box-shadow: none; }
-.rail-sp { flex: 1; }
 
-/* top bar: breadcrumb left, controls right */
+/* top bar: logo and name on the left; country, search and view switch on the right */
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark { width: 30px; height: 30px; display: block; margin: 0; flex: none; }
+.brand-mark svg { width: 30px; height: 30px; display: block; }
+.brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; white-space: nowrap; }
+.seg { flex: none; padding: 2px; gap: 2px; background: #fff; border: 1px solid var(--line); border-radius: var(--r-control, 10px); }
+.seg button { width: 28px; height: 26px; border-radius: 8px; color: var(--ink-2); }
+.seg button .icon { width: 16px; height: 16px; }
+.seg button:hover { background: var(--fill-2); color: var(--ink); }
+.seg button[aria-selected="true"] { background: var(--fill-2); color: var(--green); box-shadow: none; }
 .top { padding: 9px 20px; gap: 10px; background: #fff; border-bottom: 0; }
-.crumbs { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink-2); white-space: nowrap; }
-.crumbs b { color: var(--ink); font-weight: 500; }
-.crumbs .icon { width: 13px; height: 13px; color: var(--ink-3); }
-.top .sub { margin: 0 0 0 6px; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .country { position: relative; flex: none; margin-left: auto; }
 .country-btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font-weight: 500; font-size: 13.5px; transition: background .15s, border-color .15s; }
 .country-btn:hover { background: var(--fill); border-color: var(--line-2); }
 .country-btn .icon { width: 14px; height: 14px; color: var(--ink); }
 .country-btn[aria-expanded="true"] .icon { transform: rotate(180deg); }
 .flag { font-size: 16px; line-height: 1; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
-.search { width: 285px; margin-left: 0; }
+.search { width: 310px; margin-left: 0; }
 .search > [data-icon] { left: 10px; top: 8px; color: var(--ink-2); }
 .search input { height: 32px; padding: 0 46px 0 31px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 13.5px; }
 .search input:focus-visible { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
@@ -335,7 +331,7 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
 .result:hover, .result[aria-selected="true"] { background: var(--fill); }
 
 /* canvas */
-.canvas { background-image: none; background-color: #fff; }
+.canvas { background-color: #fff; background-image: radial-gradient(circle, #efefef 1px, transparent 1.3px); background-size: 24px 24px; }
 .edge { stroke: #d6d6d6; stroke-width: 1.25; stroke-dasharray: 4 4; }
 .edge.hot { stroke: var(--green); stroke-width: 1.5; stroke-dasharray: none; }
 #arr path { stroke: #b3b3b3; }
@@ -424,11 +420,34 @@ button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-vis
 .country-opt[aria-selected="true"] .cov { margin-left: auto; }
 .country-none { padding: 14px 12px; color: var(--ink-2); font-size: 13px; }
 
-@media (max-width: 1100px) { .top .sub { display: none; } }
-@media (max-width: 900px) {
-  .rail { width: 48px; }
+@media (max-width: 1100px) { @media (max-width: 900px) {
   .top { padding: 10px 14px; flex-wrap: wrap; }
   .country { margin-left: 0; }
   .search { flex: 1; width: auto; }
   .banner p { font-size: 13px; }
 }
+
+/* ---------- Corner radius system ----------
+   Two radii only: --r-control for controls and small elements, --r-card for containers.
+   Circular things (avatars, logo, expand toggles, progress bars) stay round. */
+:root { --r-control: 10px; --r-card: 16px; --radius: var(--r-card); }
+
+/* controls */
+.seg, .seg button, .search input, .search kbd, .country-btn, .country-find input, .country-opt, .country-opt .cov,
+.result, .btn-black, .banner-x, .btn-dark, .btn-ghost, .toolbar button, .tabs button, .tag, .pill, .chip, .n-party, .fchip, .filter,
+.chain-item, .tile, .visitors, .tbl .who .avatar.ini { border-radius: var(--r-control); }
+.tbl th:first-child, .tbl th:last-child { border-radius: 0; }
+.avatar, .avatar.ini { border-radius: 50%; }
+.tbl .who .avatar { border-radius: 50%; }
+
+/* containers */
+.node, .minimap, .toolbar, .panel, .plain, .facts, .country-menu, .results, .lv-group + .tbl-wrap, .p-photo.tile { border-radius: var(--r-card); }
+.p-photo { border-radius: 50%; }
+.p-photo.tile, .p-photo.ini { border-radius: var(--r-card); }
+.p-photo.ini { border-radius: 50%; }
+
+@media (max-width: 900px) { .panel { border-radius: var(--r-card); } }
+
+/* panel hero icon: fixed square, same grey chip as the cards */
+.p-hero > .p-photo { flex: none; }
+.p-photo.tile { background: var(--fill-2); border: 0; }

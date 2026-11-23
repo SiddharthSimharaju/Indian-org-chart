@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Political Org Charts</title>
   <meta name="description" content="Interactive org charts of the political systems of the world: who runs each country, and who answers to whom.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"%3E%3Crect width="32" height="32" rx="9" fill="%2316a34a"/%3E%3Cpath d="M16 13.2v3M8 21v-1.6a2.6 2.6 0 0 1 2.6-2.6h10.8a2.6 2.6 0 0 1 2.6 2.6V21M16 16.2V21" fill="none" stroke="%23fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/%3E%3Ccircle cx="16" cy="9" r="4.6" fill="%23fff"/%3E%3Cpath d="M16 6.3l.85 1.8 1.95.26-1.42 1.36.36 1.95L16 10.7l-1.74.97.36-1.95-1.42-1.36 1.95-.26z" fill="%2316a34a"/%3E%3Ccircle cx="8" cy="24" r="2.7" fill="%23fff"/%3E%3Ccircle cx="16" cy="24" r="2.7" fill="%23fff"/%3E%3Ccircle cx="24" cy="24" r="2.7" fill="%23fff"/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,28 +15,17 @@
   <div class="app" id="app">
     <div class="banner" id="banner" hidden>
       <span data-icon="clock"></span>
-      <p><b>This chart is a snapshot.</b> <span id="bannerText"></span></p>
-      <a class="btn-black" href="https://github.com/SiddharthSimharaju/Indian-org-chart#where-the-data-comes-from" target="_blank" rel="noopener">About the data</a>
+      <p><b id="bannerLead"></b> <span>Changes after that date aren't reflected.</span></p>
       <button class="banner-x" id="bannerX" aria-label="Dismiss"><span data-icon="close"></span></button>
     </div>
 
     <div class="body">
-      <nav class="rail" aria-label="Views">
-        <span class="brand-mark" id="brandMark" aria-hidden="true"></span>
-        <div class="seg" role="tablist" aria-label="View">
-          <button role="tab" id="tabTree" aria-selected="true" data-view="tree" aria-label="Tree view" title="Tree view"><span data-icon="tree"></span></button>
-          <button role="tab" id="tabList" aria-selected="false" data-view="list" aria-label="List view" title="List view"><span data-icon="list"></span></button>
-        </div>
-        <span class="rail-sp"></span>
-        <a class="rail-btn" href="https://github.com/SiddharthSimharaju/Indian-org-chart" target="_blank" rel="noopener" aria-label="Project on GitHub" title="Project on GitHub"><span data-icon="external"></span></a>
-      </nav>
-
       <div class="col">
         <header class="top">
-          <nav class="crumbs" aria-label="Breadcrumb">
-            <span>Political Org Charts</span><span data-icon="chevronr"></span><b id="crumbCountry"></b>
-          </nav>
-          <p class="sub" id="subtitle">Loading…</p>
+          <div class="brand">
+            <span class="brand-mark" id="brandMark" aria-hidden="true"></span>
+            <span class="brand-name">Political Org Charts</span>
+          </div>
           <div class="country" id="country">
             <button class="country-btn" id="countryBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose a country" title="Choose a country">
               <span class="flag" id="countryFlag"></span><span id="countryName"></span><span data-icon="chevron"></span>
@@ -47,6 +37,10 @@
             <input id="q" type="search" placeholder="Search a person, state or office" autocomplete="off" aria-label="Search">
             <kbd id="kbd">⌘K</kbd>
             <div class="results" id="results" hidden></div>
+          </div>
+          <div class="seg" role="tablist" aria-label="View">
+            <button role="tab" id="tabTree" aria-selected="true" data-view="tree" aria-label="Tree view" title="Tree view"><span data-icon="tree"></span></button>
+            <button role="tab" id="tabList" aria-selected="false" data-view="list" aria-label="List view" title="List view"><span data-icon="list"></span></button>
           </div>
         </header>
 

@@ -11,9 +11,7 @@ Interactive org charts of national politics, from the head of state down to legi
 
 Use the country dropdown in the top bar to switch. A link like `?c=usa` opens a specific country.
 
-![The top of the India chart: the President, Vice President, Prime Minister, Parliament, judiciary, states and Union Territories](docs/overview.png)
-
-*(Screenshots show an earlier look of the India chart.)*
+![The top of the United States chart: the President, Congress, the Supreme Court, the states and the territories, with the country dropdown, search and the tree/list switcher in the top bar](docs/overview.png)
 
 ## Countries
 
@@ -29,7 +27,9 @@ Use the country dropdown in the top bar to switch. A link like `?c=usa` opens a 
 
 About 5,700 people for India, 8,000 for the US, and between 500 and 1,500 for each of the others.
 
-![An MP selected, with the plain-English explanation of the role in the side panel](docs/people.png)
+![A governor selected, with the plain-English explanation of the office and the key facts in the side panel](docs/people.png)
+
+![The same view for another country: the United Kingdom's Prime Minister selected, with the chain of command above and the details panel on the right](docs/uk.png)
 
 ## How accurate is it?
 
@@ -49,7 +49,7 @@ Things to know:
 - **Click a card** to open its details: what the role means, how long the term is, who can remove them, and what the party stands for.
 - **Search** for any person or office. Press `/` or ⌘K (Ctrl K on Windows) to jump to the search box.
 - **Drag** to move around, and press ⌘/Ctrl and scroll to zoom.
-- **Use the icons on the left** to switch between the tree and the list view.
+- **Use the two icons beside the search box** to switch between the tree and the list view.
 
 ## What it doesn't cover
 

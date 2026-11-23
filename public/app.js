@@ -47,7 +47,7 @@ const P = {
 const icon = (n) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${P[n] || ""}</svg>`;
 const nodeIcon = (n) => C.nodeIcon(n);
 const tileColor = (n) => C.tileColor(n);
-const MARK = '<svg viewBox="0 0 32 32" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="11"/><path d="M5 16h22M16 5c3.4 3.1 5 6.7 5 11s-1.6 7.9-5 11c-3.4-3.1-5-6.7-5-11s1.6-7.9 5-11z"/></svg>';
+const MARK = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#16a34a"/><path d="M16 13.2v3M8 21v-1.6a2.6 2.6 0 0 1 2.6-2.6h10.8a2.6 2.6 0 0 1 2.6 2.6V21M16 16.2V21" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="9" r="4.6" fill="#fff"/><path d="M16 6.3l.85 1.8 1.95.26-1.42 1.36.36 1.95L16 10.7l-1.74.97.36-1.95-1.42-1.36 1.95-.26z" fill="#16a34a"/><circle cx="8" cy="24" r="2.7" fill="#fff"/><circle cx="16" cy="24" r="2.7" fill="#fff"/><circle cx="24" cy="24" r="2.7" fill="#fff"/></svg>';
 
 /* ---------- State ---------- */
 let C, DATA, PARTY = {}; // C: active country config
@@ -457,7 +457,7 @@ const explainFor = (n, member) => C.explainFor(n, member);
 const govStatus = (n, p) => C.govStatus?.(n, p, { nodes }) || null;
 function plainBlock(n, member) {
   const ex = explainFor(n, member); if (!ex) return "";
-  return `<div class="plain"><h4>In plain English</h4><p>${esc(ex.plain)}</p>${(ex.facts || []).map(([k, v]) => `<div class="pf"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
+  return `<div class="plain"><p>${esc(ex.plain)}</p>${(ex.facts || []).map(([k, v]) => `<div class="pf"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div>`;
 }
 function termsBlock(n, member) {
   const ex = explainFor(n, member); if (!ex?.terms?.length) return "";
@@ -532,7 +532,7 @@ function showResults(q) {
   const score = (s) => { const t = s.title.toLowerCase(); return words.every((w) => t.split(/[\s.]+/).includes(w)) ? 0 : words.every((w) => t.includes(w)) ? 1 : 2; };
   const hits = SEARCH.filter((s) => words.every((w) => s.key.toLowerCase().includes(w))).sort((a, b) => score(a) - score(b)).slice(0, 12);
   hi = 0; box.hidden = false;
-  box.innerHTML = hits.length ? hits.map((h, i) => `<button class="result" data-i="${i}" aria-selected="${i === 0}">${h.p ? avatar(h.p) : `<div class="tile" style="--tile:${tileColor(h.n)};width:40px;height:40px;border-radius:11px">${icon(nodeIcon(h.n))}</div>`}<div><div class="t">${esc(h.title)}</div><div class="s">${esc(h.sub)}</div></div></button>`).join("") : `<div class="none">No matches for “${esc(q)}”</div>`;
+  box.innerHTML = hits.length ? hits.map((h, i) => `<button class="result" data-i="${i}" aria-selected="${i === 0}">${h.p ? avatar(h.p) : `<div class="tile" style="--tile:${tileColor(h.n)};width:40px;height:40px">${icon(nodeIcon(h.n))}</div>`}<div><div class="t">${esc(h.title)}</div><div class="s">${esc(h.sub)}</div></div></button>`).join("") : `<div class="none">No matches for “${esc(q)}”</div>`;
   box._hits = hits;
 }
 function pick(h) {
@@ -616,8 +616,7 @@ async function loadCountry(id, hash = "") {
   document.title = `Political Org Charts · ${C.pageTitle}`;
   $('meta[name="description"]')?.setAttribute("content", C.description);
   $("#q").placeholder = C.searchPlaceholder;
-  $("#subtitle").textContent = "Loading…";
-  $("#countryFlag").textContent = C.flag; $("#countryName").textContent = C.name; $("#crumbCountry").textContent = C.name;
+  $("#countryFlag").textContent = C.flag; $("#countryName").textContent = C.name;
   markCountry();
   $("#loading")?.remove();
   $("#stage").insertAdjacentHTML("beforeend", `<div class="loading" id="loading">${esc(C.loading)}</div>`);
@@ -635,8 +634,7 @@ async function loadCountry(id, hash = "") {
   document.title = `Political Org Charts · ${C.pageTitle}`;
   $('meta[name="description"]')?.setAttribute("content", C.description);
   index(DATA.root); buildSearch(); expanded.add(C.rootId);
-  $("#subtitle").textContent = C.subtitle(nodes);
-  $("#bannerText").textContent = `Names and offices come from Wikipedia and official sources as of ${new Date(DATA.generatedAt).toLocaleDateString(C.locale, { day: "numeric", month: "short", year: "numeric" })}. Offices change, so check the linked article for anything important.`;
+  $("#bannerLead").textContent = `This list is from ${new Date(DATA.generatedAt).toLocaleDateString(C.locale, { day: "numeric", month: "short", year: "numeric" })}.`;
   if (view === "list") renderList(); else { render(); fit(false); }
   if (hash && nodes.has(hash)) select(hash, null, { center: true });
 }
